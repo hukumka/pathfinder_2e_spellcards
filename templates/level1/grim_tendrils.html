@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block name %} Grim Tendrils {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 1 {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Manipulate, Void") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Area", value="30-foot line") }}
+  {{ property(name="Defence", value="Fortitude") }}
+{% endblock %}
+{% block description %}
+    <div>
+    Tendrils of darkness curl out from your fingertips and race
+    through the air. You deal 2d4 void damage and 1 persistent
+    bleed damage to living creatures in the line. Each living
+    creature in the line must attempt a Fortitude save.
+    {{ success_table(
+      crit_success="The target is unaffected.",
+      success="The creature takes half the void damage and no persistent bleed damage.",
+      failure="The creature takes full damage.",
+      crit_failure="The creature takes double void damage and double persistent bleed damage."
+      )
+    }}
+    </div>
+{% endblock %}
+{% block heightened %}
+    <div class="heightened">
+		<span class="caption">Heightened (+1)</span>
+		<span>The void damage increases by 2d4, and the persistent bleed damage increases by 1</span>
+    </div>
+{% endblock %}
+
+

@@ -6,8 +6,8 @@
 div.card {
   break-inside:avoid; 
   border: solid 2px #AAA !important;
-  width: 8cm;
-  height: 12cm;
+  width: 8.5cm;
+  height: 13cm;
   padding: 0.2em;
   display: inline-flex;
   font-size: 0.8em;
@@ -42,6 +42,7 @@ span.action-icon {
 div.traits {
   display: flex;
   justify-content: left;
+  flex-wrap: wrap;
   gap: 0.3em;
   align-items: baseline;
 }

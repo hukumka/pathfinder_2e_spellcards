@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::io::stdin;
 use tera::{from_value, Context, Result, Tera, Value};
 
@@ -53,6 +54,24 @@ fn properties(args: &HashMap<String, Value>) -> Result<Value> {
     )))
 }
 
+fn success_table(args: &HashMap<String, Value>) -> Result<Value> {
+    let items = ["crit_success", "success", "failure", "crit_failure"];
+    let captions = ["Critical Success", "Success", "Failure", "Critical Failure"];
+    let mut result = String::new();
+    for (item, caption) in items.iter().zip(captions) {
+        if args.contains_key(*item) {
+            let value = get_string(args, item)?;
+            write!(
+                &mut result,
+                "<div><span class=\"caption\">{}</span> {}</div>",
+                caption, value
+            )
+            .unwrap();
+        }
+    }
+    Ok(Value::String(result))
+}
+
 fn context() -> Context {
     let mut context = Context::new();
     context.insert("action", "<span class=\"action-icon\">1</span>");
@@ -72,6 +91,7 @@ fn main() -> tera::Result<()> {
     tera.autoescape_on(vec![]);
     tera.register_function("traits", traits);
     tera.register_function("property", properties);
+    tera.register_function("success_table", success_table);
     let context = context();
 
     let pages = pages
