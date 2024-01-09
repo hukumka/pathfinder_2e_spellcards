@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block name %} Runic Weapon {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 1 {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Manipulate") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="touch")}}
+  {{ property(name="Target", value="1 weapon that is unattended or wielded by a willing creature")}}
+  {{ property(name="Duration", value="1 minute")}}
+{% endblock %}
+{% block description %}
+    <div>
+    The weapon glimmers with magic as temporary runes carve
+    down its length. The target becomes a +1 striking weapon,
+    gaining a +1 item bonus to attack rolls and increasing the
+    number of weapon damage dice to two
+    </div>
+{% endblock %}
+{% block heightened %}
+    <div class="heightened">
+		<span class="caption">Heightened (6th)</span>
+		<span>The weapon is +2 greater striking.</span>
+    </div>
+    <div class="heightened">
+		<span class="caption">Heightened (9th)</span>
+		<span>The weapon is +3 greater striking.</span>
+    </div>
+{% endblock %}

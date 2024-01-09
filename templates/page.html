@@ -1,0 +1,15 @@
+<html>
+<head>
+	<link href="style.css" rel="stylesheet"/>
+</head>
+
+<body>
+	<div class="page">
+		{% for page in pages %}
+			{{page | safe }}
+		{% endfor %}
+	</div>
+</body>
+
+</html>
+
