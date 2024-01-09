@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block name %} Stablize {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} Cantrip 1 {% endblock %}
+{% block traits %} {{ traits(traits="Cantrip, Healing, Concentrate, Manipulate, Vitality") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="30 feet") }}
+  {{ property(name="Targets", value="1 dying creature") }}
+{% endblock %}
+{% block description %}
+    <div>
+    Life energy shuts death’s door. The target loses the dying
+    condition, though it remains unconscious at 0 Hit Points.
+    </div>
+{% endblock %}
