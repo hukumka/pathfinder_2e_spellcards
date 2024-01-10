@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block header_properties %} style="font-size: 1.4em" {% endblock %}
+{% block name %} Telekinetic Projectile {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} Cantrip 1 {% endblock %}
+{% block traits %} {{ traits(traits="Attack, Cantrip, Concentrate, Manipulate") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="30 feet") }}
+  {{ property(name="Target", value="1 creature") }}
+  {{ property(name="Defence", value="AC") }}
+{% endblock %}
+{% block description %}
+    <div>
+    You hurl a loose, unattended object that is within range and
+    that has 1 Bulk or less at the target. Make a spell attack roll
+    against the target’s AC. If you hit, you deal 2d6 bludgeoning,
+    piercing, or slashing damage—as appropriate for the object you
+    hurled. No specific traits or magic properties of the hurled item
+    affect the attack or the damage.
+    {{ success_table(
+        crit_success="You deal double damage.",
+        success="You deal full damage."   
+    )}}
+    </div>
+{% endblock %}
+{% block heightened %}
+    {{ heightened(name="+1", value="The damage increases by 1d6") }}
+{% endblock %}
+
+

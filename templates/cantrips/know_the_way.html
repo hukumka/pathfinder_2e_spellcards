@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block name %} Know the Way {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %}
+<img
+    src="images/knukles.jpg"
+    style="height: 1em"
+></img>
+Cantrip 1
+{% endblock %}
+{% block traits %} {{ traits(traits="Cantrip, Concentrate, Detection, Manipulate") }} {% endblock %}
+{% block description %}
+    <div>
+    In your mind’s eye, you magically reorient yourself. You
+    immediately know which direction is north (if it exists at your
+    current location), and you can choose a location you were at
+    within the last 24 hours and learn what direction it lies.
+    </div>
+{% endblock %}
+{% block heightened %}
+    <div class="heightened">
+    {{ property(name="Heightened (3rd)", value="You can choose a location you were at within the last week.")}}
+    </div>
+    <div class="heightened">
+    {{ property(name="Heightened (7th)", value="You can choose a location you were at regardless of how long ago you were there.")}}
+    </div>
+{% endblock %}
+
+

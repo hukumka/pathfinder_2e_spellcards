@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block name %} Figment {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} Cantrip 1 {% endblock %}
+{% block traits %} {{ traits(traits="Cantrip, Concentrate, Illusion, Manipulate") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="30 feet") }}
+  {{ property(name="Duration", value="sustained") }}
+{% endblock %}
+{% block description %}
+    <div>
+    You create a simple illusory sound or vision. A sound adds
+    the auditory trait to the spell and the sound can’t include
+    intelligible words or elaborate music. A vision adds the visual
+    trait, can be no larger than a 5-foot cube, and is clearly crude
+    and undetailed if viewed from within 15 feet. When you Cast
+    or Sustain the Spell, you can attempt to Create a Diversion
+    with the illusion, gaining a +2 circumstance bonus to your
+    Deception check. If the attempt fails against a creature, that
+    creature disbelieves the figment.
+    </div>
+{% endblock %}
+

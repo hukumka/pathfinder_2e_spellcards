@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block name %} Nudge Fate {% endblock %}
+{% block actions %} {{action}} {% endblock %}
+{% block level %} Cantrip 1 {% endblock %}
+{% block traits %} {{ traits(traits="Uncommon, Cantrip, Concentrate, Hex, Witch") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="30 feet") }}
+  {{ property(name="Target", value="1 creature") }}
+  {{ property(name="Duration", value="1 minute") }}
+{% endblock %}
+{% block description %}
+    <div>
+    <p>The barest spin of your patron’s spool is enough to alter fate.
+    When the target fails an attack roll, skill check, or saving
+    throw and a +1 status bonus would turn a critical failure into
+    a failure, or failure into a success, you grant the target a +1
+    status bonus to the check retroactively, changing the outcome
+    appropriately. The spell then ends.</p>
+    <p>If you cast nudge fate while a previous casting of this hex is
+    still in effect, the previous effect ends.</p>
+    </div>
+{% endblock %}
+
+

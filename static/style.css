@@ -31,6 +31,7 @@ div.header {
   margin-bottom: 0.2em;
   display: flex;
   justify-content: space-between;
+  flex-wrap: reverse;
   align-items: baseline;
 }
 
@@ -62,6 +63,7 @@ div.heightened {
 
 div.page {
   display: table;
+  align-items: start;
 }
 
 p {

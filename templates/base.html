@@ -1,7 +1,7 @@
 <div class="card">
   {% block header %}
 	<div class="header-group">
-	<div class="header">
+	<div class="header" {% block header_properties %}{% endblock %}>
 		<span class="name">{% block name %}name{% endblock %}</span>
 		<span>
 			{% block actions %}actions{% endblock %}

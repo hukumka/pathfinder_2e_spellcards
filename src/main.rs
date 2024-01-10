@@ -54,6 +54,16 @@ fn properties(args: &HashMap<String, Value>) -> Result<Value> {
     )))
 }
 
+fn heightened(args: &HashMap<String, Value>) -> Result<Value> {
+    // Extract 'traits' variable and parse it as `Vec<String>`
+    let name = get_string(args, "name")?;
+    let value = get_string(args, "value")?;
+    Ok(Value::String(format!(
+        "<div class=\"heightened\"><p><span class=\"caption\">Heighened ({})</span> {}</p></div>",
+        name, value,
+    )))
+}
+
 fn success_table(args: &HashMap<String, Value>) -> Result<Value> {
     let items = ["crit_success", "success", "failure", "crit_failure"];
     let captions = ["Critical Success", "Success", "Failure", "Critical Failure"];
@@ -91,6 +101,7 @@ fn main() -> tera::Result<()> {
     tera.autoescape_on(vec![]);
     tera.register_function("traits", traits);
     tera.register_function("property", properties);
+    tera.register_function("heightened", heightened);
     tera.register_function("success_table", success_table);
     let context = context();
 
