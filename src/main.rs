@@ -89,6 +89,10 @@ fn context() -> Context {
     context.insert("three_actions", "<span class=\"action-icon\">3</span>");
     context.insert("free_action", "<span class=\"action-icon\">4</span>");
     context.insert("reaction", "<span class=\"action-icon\">5</span>");
+    context.insert(
+        "no_actions",
+        "<span class=\"action-icon\" style=\"color: white\">1</span>",
+    );
     context
 }
 

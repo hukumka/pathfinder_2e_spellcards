@@ -1,9 +1,6 @@
 {% extends "base.html" %}
 {% block name %} Read Aura {% endblock %}
-{% block actions %}
-    <!-- For some reason having different title height breaks global alignment. WTF CSS!? -->
-    <span style="color: white"  >{{action}}</span>
-{% endblock %}
+{% block actions %} {{no_actions}} {% endblock %}
 {% block level %} Cantrip 1 {% endblock %}
 {% block traits %} {{ traits(traits="Cantrip, Concentrate, Detection, Manipulate") }} {% endblock %}
 {% block properties %}
