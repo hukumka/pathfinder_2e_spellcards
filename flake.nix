@@ -53,6 +53,9 @@
           };
          
           devshells.default = {
+            imports = [
+              "${inputs.devshell}/extra/language/c.nix"
+            ];
             packages = with pkgs; [
               rust-analyzer-unwrapped
               rust-bin.stable.latest.default
