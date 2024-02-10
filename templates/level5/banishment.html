@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block name %} Fear {% endblock %}
+{% block name %} Banishment {% endblock %}
 {% block actions %} {{two_actions}} {% endblock %}
 {% block level %} 1 {% endblock %}
-{% block traits %} {{ traits(traits="Concentrate, Emotion, Fear, Manipulate, Mental") }} {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Incapacitation, Manipulate") }} {% endblock %}
 {% block properties %}
   {{ property(name="Range", value="30 feet") }}
   {{ property(name="Target", value="1 creature") }}

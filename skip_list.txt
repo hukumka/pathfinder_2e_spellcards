@@ -1,5 +1,10 @@
 This document lists all spells that were skipped and reasoning behind.
 
+A:
+
 Aerial form: description is way to long to fit on the card.
 Animal form: description is way to long to fit on the card.
 Aqueius orb: description is way to long to fit on the card.
+Avatar: description is way to long to fit on the card.
+
+B:
