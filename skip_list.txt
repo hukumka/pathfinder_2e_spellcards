@@ -8,3 +8,5 @@ Aqueius orb: description is way to long to fit on the card.
 Avatar: description is way to long to fit on the card.
 
 B:
+
+Blessed boundary: description is way to long to fit on the card.

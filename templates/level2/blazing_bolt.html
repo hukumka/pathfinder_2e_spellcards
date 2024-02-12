@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block name %} Blazing Bolt {% endblock %}
+{% block actions %} {{action}} to {{three_actions}} {% endblock %}
+{% block level %} 2 {% endblock %}
+{% block traits %} {{ traits(traits="Attack, Concentrate, Fire, Manipulate") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="60 feet") }}
+  {{ property(name="Target", value="1 or more creatures") }}
+  {{ property(name="Defence", value="AC") }}
+{% endblock %}
+{% block description %}
+    <div>
+    You fire a ray of heat and flame. Make a spell attack roll against
+    a single creature. On a hit, the target takes 2d6 fire damage,
+    and on a critical hit, the target takes double damage.
+    </div>
+    <div>
+    For each additional action you use when Casting the Spell,
+    you can fire an additional ray at a different target, to a maximum
+    of three rays targeting three different targets for 3 actions.
+    These attacks each increase your multiple attack penalty, but
+    you don’t increase your multiple attack penalty until after you
+    make all the spell attack rolls for blazing bolt. If you spend 2 or
+    more actions Casting the Spell, the damage increases to 4d6 fire
+    damage on a hit, and it still deals double damage on a critical hit.
+    </div>
+{% endblock %}
+{% block heightened %}
+  {{heightened(name="+1", value="The damage to each target increases by 1d6 for the 1-action version, or by 2d6 for the 2- and 3-action
+versions.")}}
+{% endblock %}
+
+

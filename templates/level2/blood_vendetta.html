@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block name %} Blood Vendetta {% endblock %}
+{% block actions %} {{reaction}} {% endblock %}
+{% block level %} 2 {% endblock %}
+{% block traits %} {{ traits(traits="Curse") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Trigger", value="A creature deals piercing, slashing, or persistent bleed
+damage to you; You can bleed.") }}
+  {{ property(name="Range", value="30 feet") }}
+  {{ property(name="Target", value="the triggering creature") }}
+  {{ property(name="Defence", value="Will") }}
+{% endblock %}
+{% block description %}
+    <div>
+    You curse the target, punishing it for having the audacity to
+    spill your blood. The target takes 2d6 persistent bleed damage
+    and must attempt a Will save.
+    {{ success_table(
+      crit_success="The target is unaffected.",
+      success="The target takes half the persistent bleed damage.",
+      failure="he target takes the full persistent bleed damage. Until
+the bleeding stops, the target has weakness 1 to piercing
+and slashing damage.",
+      crit_failure="As failure, but the target takes double the
+persistent bleed damage."
+      )
+    }}
+    </div>
+{% endblock %}
+{% block heightened %}
+  {{heightened(name="+2", value="The persistent bleed damage increases by
+2d6.")}}
+{% endblock %}
+
+
