@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block name %} Calm {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 2 {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Emotion, Incapacitation, Manipulate, Mental") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="120 feet") }}
+  {{ property(name="Area", value="10-foot burst")}}
+  {{ property(name="Defence", value="Will") }}
+  {{ property(name="Duration", value="sustained up to 1 minute") }}
+{% endblock %}
+{% block description %}
+    <div>
+    You forcibly calm creatures in the area, soothing them into a
+    nonviolent state; each creature must attempt a Will save.
+    {{ success_table(
+      crit_success="The target is unaffected.",
+      success="Calming urges impose a –1 status penalty to the creature’s attack rolls.",
+      failure="Any emotion effects that would affect the creature
+are suppressed and the creature can’t use hostile actions. If
+the target is subject to hostility from any other creature, it
+ceases to be affected by calm.",
+      crit_failure="As failure, but hostility doesn’t end the effect."
+      )
+    }}
+    </div>
+{% endblock %}
+
+
