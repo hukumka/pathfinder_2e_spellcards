@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block name %} Breath fire {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 1 {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Fire, Manipulate") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Area", value="15-foot cone") }}
+  {{ property(name="Defence", value="Reflex") }}
+{% endblock %}
+{% block description %}
+    <div>
+    A gout of flame sprays from your mouth. You deal 2d6 fire
+    damage to creatures in the area with a basic Reflex save.
+    </div>
+{% endblock %}
+{% block heightened %}
+  {{heightened(name="+1", value="The damage increases by 2d6.")}}
+{% endblock %}
+
