@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block name %} Chilling Darkness {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 3 {% endblock %}
+{% block traits %} {{ traits(traits="Attack, Cold, Concentrate, Darkness, Manipulate, Unholy") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="120 feet") }}
+  {{ property(name="Target", value="1 creature") }}
+  {{ property(name="Defence", value="AC") }}
+{% endblock %}
+{% block description %}
+    <div>
+    You shoot an utterly cold ray of darkness tinged with unholy
+energy. Make a ranged spell attack. The ray deals 5d6 cold damage.
+If the target has the holy trait, you deal an extra 5d6 spirit damage.
+    {{ success_table(
+      crit_success="The target takes double damage.",
+      success="The target takes full damage.",
+      )
+    }}
+    f the ray passes through an area of magical light or targets a
+creature affected by magical light, chilling darkness attempts to
+counteract the light. If you need to determine whether the ray
+passes through an area of light, draw a line between yourself
+and the spell’s target,
+    </div>
+{% endblock %}
+{% block heightened %}
+  {{heightened(name="+1", value="The cold damage increases by 2d6, and the
+spirit damage against holy creatures increases by 2d6.")}}
+{% endblock %}
+
+

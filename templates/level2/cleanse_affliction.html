@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block name %} Cleanse Affliction {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 2 {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Healing, Manipulate") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="touch") }}
+  {{ property(name="Target", value="1 willing creature") }}
+{% endblock %}
+{% block description %}
+    <div>
+    Gentle restorative magic pushes back the effects of toxins and
+more complex maladies. Choose an affliction on the target,
+such as a curse, disease, or poison. If it has advanced past
+stage one, reduce the stage by one. This reduction can be
+applied only once to a given case of an affliction, with the case
+ending when it’s completely cured. Although the reduction
+can’t occur again, heightened versions of this spell attempt to
+counteract with each casting
+    </div>
+{% endblock %}
+
+{% block heightened %}
+  {{ heightened(name="3rd", value="Attempt to counteract the
+affliction if it is a disease or poison")}}
+  {{ heightened(name="4th", value="Attempt to counteract the affliction if it is a
+curse, disease, or poison")}}
+{% endblock %}
+

@@ -54,6 +54,16 @@ fn properties(args: &HashMap<String, Value>) -> Result<Value> {
     )))
 }
 
+fn inline_properties(args: &HashMap<String, Value>) -> Result<Value> {
+    // Extract 'traits' variable and parse it as `Vec<String>`
+    let name = get_string(args, "name")?;
+    let value = get_string(args, "value")?;
+    Ok(Value::String(format!(
+        "<span class=\"inline-property\"><span class=\"caption\">{}</span> {}</span>",
+        name, value,
+    )))
+}
+
 fn heightened(args: &HashMap<String, Value>) -> Result<Value> {
     // Extract 'traits' variable and parse it as `Vec<String>`
     let name = get_string(args, "name")?;
@@ -105,6 +115,7 @@ fn main() -> tera::Result<()> {
     tera.autoescape_on(vec![]);
     tera.register_function("traits", traits);
     tera.register_function("property", properties);
+    tera.register_function("inline_property", inline_properties);
     tera.register_function("heightened", heightened);
     tera.register_function("success_table", success_table);
     let context = context();

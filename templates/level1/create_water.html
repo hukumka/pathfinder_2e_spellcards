@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block name %} Create Water {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 1 {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Manipulate, Water") }} {% endblock %}
+{% block properties %}
+  {{ property(name="Range", value="0 feet") }}
+{% endblock %}
+{% block description %}
+    <div>
+    As you cup your hands, water begins to flow forth from them.
+You create 2 gallons of water. If no one drinks it, it evaporates
+after 1 day.
+    </div>
+{% endblock %}
+
+

@@ -83,3 +83,7 @@ hr {
     border: none;
     border-top: solid 2px #aaa;
 }
+
+span.inline-property {
+  margin-right: 1em;
+}

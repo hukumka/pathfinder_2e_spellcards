@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block name %} Charm {% endblock %}
+{% block actions %} {{two_actions}} {% endblock %}
+{% block level %} 1 {% endblock %}
+{% block traits %} {{ traits(traits="Concentrate, Emotion, Incapacitation, Manipulate, Mental, Subtle") }} {% endblock %}
+{% block properties %}
+  {{ inline_property(name="Range", value="30 feet") }}
+  {{ inline_property(name="Target", value="1 creature") }}
+  <br>
+  {{ inline_property(name="Defence", value="Will") }}
+  {{ inline_property(name="Duration", value="1 hour") }}
+{% endblock %}
+{% block description %}
+    <div style="font-size: 0.8em">
+    To the target, your words are honey and your visage seems
+bathed in a dreamy haze. It must attempt a Will save, with a +4
+circumstance bonus if you or your allies recently threatened it
+or used hostile actions against it.
+You can Dismiss the spell. If you use hostile actions against
+the target, the spell ends. When the spell ends, the target
+doesn’t necessarily realize it was charmed unless its friendship
+with you or the actions you convinced it to take clash with
+its expectations, meaning you could potentially convince the
+target to continue being your friend via mundane means.
+    {{ success_table(
+      crit_success="The target is unaffected and aware you tried
+to charm it.",
+      success="The target is unaffected but thinks your spell was
+something harmless instead of charm, unless it identifies
+the spell ",
+      failure="The target’s attitude becomes friendly toward you. If it
+was friendly, it becomes helpful. It can’t use hostile actions
+against you.",
+      crit_failure="The target’s attitude becomes helpful toward
+you, and it can’t use hostile actions against you."
+      )
+    }}
+    </div>
+{% endblock %}
+{% block heightened %}
+  <div style="font-size: 0.8em">
+  {{heightened(name="4rd", value="The duration lasts until your next daily
+preparations.")}}
+  {{heightened(name="8th", value="The duration lasts until your next daily
+preparations, and you can target up to 10 creatures.")}}
+  </div>
+{% endblock %}
+
+
