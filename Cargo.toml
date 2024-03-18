@@ -1,10 +1,13 @@
 [package]
 name = "spellcard_generator"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tera = "1.19.1"
+anyhow = "1.0"
+json = "0.12"
+printpdf = "0.7.0"
+font-kit = "0.12"
 

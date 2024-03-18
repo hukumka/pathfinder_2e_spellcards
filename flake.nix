@@ -2,63 +2,37 @@
   description = "Pathfinder 2e SpellCard generator";
 
   inputs = {
-    flake-parts = {
-      url = "github:hercules-ci/flake-parts";
-      inputs.nixpkgs-lib.follows = "nixpkgs";
-    };
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
     rust-overlay.url = "github:oxalica/rust-overlay";
-    crate2nix.url = "github:nix-community/crate2nix";
-    devshell.url = "github:numtide/devshell";
+    nixpkgs.follows = "nixpkgs";
   };
 
-  outputs =
-    inputs @ { self
-    , nixpkgs
-    , flake-parts
-    , rust-overlay
-    , crate2nix
-    , ...
-    }: flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [
-        inputs.devshell.flakeModule
-      ];
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
-      ];
-
-      perSystem = { system, pkgs, lib, inputs', ... }:
+  outputs = inputs@{ self, nixpkgs, flake-parts, ...}: 
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = nixpkgs.lib.systems.flakeExposed;
+      perSystem = {self', pkgs, system, ...}:
         let
-          cargoNix = inputs.crate2nix.tools.${system}.appliedCargoNix {
-            name = "rustnix";
-            src = ./.;
+          rustVersion = "1.65.0";
+          rustPkgs = pkgs.rustBuilder.makePackageSet {
+            inherit rustVersion;
+            packageFun = ./Cargo.nix;
           };
-          overlays = [ (import rust-overlay) ];
-          pkgs = import nixpkgs {
-            inherit system overlays;
+        in {
+          _module.args.pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ inputs.cargo2nix.overlays.default (import inputs.rust-overlay) ];
           };
-        in
-        rec {
-          checks = {
-            rustnix = cargoNix.rootCrate.build.override {
-              runTests = true;
-            };
+          packages = rec {
+            spellcard_generator = (rustPkgs.workscape.spellcard_generator {});
+            default = spellcard_generator;
           };
-
-          packages = {
-            rustnix = cargoNix.rootCrate.build;
-            default = packages.rustnix;
-          };
-         
-          devshells.default = {
-            imports = [
-              "${inputs.devshell}/extra/language/c.nix"
-            ];
-            packages = with pkgs; [
+          devShells.default = pkgs.mkShell {
+            buildInputs = with pkgs; [
+              pkg-config
+              fontconfig
               rust-analyzer-unwrapped
-              rust-bin.stable.latest.default
+              rust-bin.stable.${rustVersion}.default
             ];
           };
         };
