@@ -1,11 +1,12 @@
-use crate::rich_text::{Font, RichText, RichTextBlock, RichTextPart};
-use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use crate::rich_text::{Font, SceneBuilder};
+use pulldown_cmark::{Event, Parser, Tag};
+use std::borrow::Cow;
 
+#[derive(Copy, Clone)]
 pub struct MdConfig<'a> {
     pub text_font: &'a Font,
     pub bold_font: &'a Font,
     pub italic_font: &'a Font,
-    pub text_size: f32,
 }
 
 #[derive(Default)]
@@ -42,30 +43,46 @@ impl MdState {
     }
 }
 
-pub fn render_rich_text<'a>(config: &MdConfig<'a>, markdown: &str) -> RichText<'a> {
-    let markdown = markdown
-        .trim()
-        .replace('\r', "")
-        .replace("\n\n", "<br />\n");
+impl<'a> SceneBuilder<'a> {
+    pub fn add_markdown(&mut self, config: &MdConfig<'a>, markdown: &'a str) -> &mut Self {
+        let mut md_state = MdState::default();
+        let mut tag_stack = vec![];
 
-    let mut parts = vec![];
-    let mut md_state = MdState::default();
-    let mut tag_stack = vec![];
-    for part in Parser::new(&markdown) {
-        match part {
-            Event::Text(text) => parts.push(RichTextBlock::Text(RichTextPart {
-                text: text.into_string(),
-                font: md_state.get_font(config),
-                font_size: config.text_size,
-            })),
-            Event::HardBreak => parts.push(RichTextBlock::LineBreak),
-            Event::SoftBreak => parts.push(RichTextBlock::LineBreak),
+        let mut iter = markdown.split("\n\n");
+        for part in Parser::new(iter.next().unwrap()) {
+            self.add_event(config, &mut md_state, &mut tag_stack, part);
+        }
+        for line in iter {
+            self.finish_line();
+            for part in Parser::new(&line) {
+                self.add_event(config, &mut md_state, &mut tag_stack, part);
+            }
+        }
+        self
+    }
+
+    fn add_event(
+        &mut self,
+        config: &MdConfig<'a>,
+        md_state: &mut MdState,
+        tag_stack: &mut Vec<Tag<'a>>,
+        event: Event<'a>,
+    ) {
+        match event {
+            Event::Text(text) => {
+                let old_font = self.get_font();
+                self.set_font(md_state.get_font(config));
+                self.add_text(text);
+                self.set_font(old_font);
+            }
+            Event::HardBreak | Event::SoftBreak => {
+                self.finish_line();
+            }
             Event::Start(Tag::Link { title, .. }) => {
-                parts.push(RichTextBlock::Text(RichTextPart {
-                    text: title.into_string(),
-                    font: config.italic_font,
-                    font_size: config.text_size,
-                }))
+                let old_font = self.get_font();
+                self.set_font(config.italic_font)
+                    .add_text(title)
+                    .set_font(old_font);
             }
             Event::Start(tag) => {
                 md_state.apply(tag.clone());
@@ -79,5 +96,4 @@ pub fn render_rich_text<'a>(config: &MdConfig<'a>, markdown: &str) -> RichText<'
             _ => {}
         }
     }
-    RichText { parts }
 }

@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Result};
-use json::{object::Object, Array, JsonValue};
+use json::{object::Object, JsonValue};
 
 pub trait TypedParse: Sized {
     fn parse(object: &JsonValue) -> Result<Self>;

@@ -9,6 +9,6 @@ layout {
 		}
 	}
 
-	tab name="Development" command="dev"
 	tab name="Testings" command="dev"
+	tab name="Development" command="dev"
 }

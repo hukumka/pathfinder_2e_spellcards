@@ -1,11 +1,14 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use font_kit::font;
 use font_kit::handle::Handle;
 use pathfinder_geometry::{rect::RectF, vector::Vector2F};
-use printpdf::{IndirectFontRef, PdfDocumentReference};
+use printpdf::{BuiltinFont, IndirectFontRef, PdfDocumentReference};
+use std::borrow::Cow;
 use std::fmt;
 use std::fs::File;
 use std::path::Path;
+
+const LINE_THICKNESS: f32 = 1.0;
 
 pub struct Font {
     font: font::Font,
@@ -14,16 +17,19 @@ pub struct Font {
 
 impl Font {
     /// Add Helvetica font to document, and construct reference to it.
-    pub fn add_helvetica(
-        doc: &mut PdfDocumentReference,
-        font: printpdf::BuiltinFont,
-    ) -> Result<Self> {
+    pub fn add_helvetica(doc: &mut PdfDocumentReference, font: BuiltinFont) -> Result<Self> {
+        let font_path = match font {
+            BuiltinFont::Helvetica => "static/Helvetica.ttf",
+            BuiltinFont::HelveticaBold => "static/Helvetica-Bold.ttf",
+            BuiltinFont::HelveticaOblique => "static/Helvetica.ttf",
+            _ => bail!("Unable to load font ref"),
+        };
+
         let font_ref = doc
             .add_builtin_font(font)
             .map_err(|e| anyhow::Error::from(e).context("Unable to load font ref"))?;
 
-        let font =
-            Handle::from_path(AsRef::<Path>::as_ref("static/Helvetica.ttf").into(), 0).load()?;
+        let font = Handle::from_path(AsRef::<Path>::as_ref(font_path).into(), 0).load()?;
         Ok(Font { font, font_ref })
     }
 
@@ -52,210 +58,239 @@ impl Font {
     }
 }
 
-pub struct RichText<'a> {
-    pub parts: Vec<RichTextBlock<'a>>,
+/// Polygon to draw boxes
+pub struct Polygon {
+    pub points: Vec<Vector2F>,
 }
 
-pub enum RichTextBlock<'a> {
-    Text(RichTextPart<'a>),
-    LineBreak,
+/// Scene to display
+pub struct Scene<'a> {
+    pub polygons: Vec<Polygon>,
+    pub parts: Vec<TextChunk<'a, 'a>>,
 }
 
-pub struct RichTextPart<'a> {
-    pub text: String,
-    pub font: &'a Font,
-    pub font_size: f32,
-}
+/// Builder for rich text rendering.
+///
+/// Coordinates are measured in `Pt`.
+/// Coordinates are
+pub struct SceneBuilder<'a> {
+    /// Prepared content.
+    chunks: Vec<TextChunk<'a, 'a>>,
+    polygons: Vec<Polygon>,
+    /// Content which is still being laid out. Positions will change
+    /// once line will be finilized.
+    current_line: Vec<Block<'a>>,
+    /// Bounding box inside which we try to fit content.
+    bounding_box: RectF,
+    current_font: &'a Font,
 
-/// Part of rich text, positioned
-/// within layout, and ready for rendering.
-pub struct TextChunk<'a> {
-    pub text: &'a str,
-    pub rect: RectF,
-    pub font: &'a Font,
-    pub font_size: f32,
-}
-
-impl<'a> fmt::Debug for TextChunk<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "TextChunk(text={text:#?}, rect={rect:#?})",
-            text = self.text,
-            rect = self.rect
-        )
-    }
-}
-
-pub enum JustifyContent {
-    AlignLeft,
-    AlignRight,
-    JustifyEven,
-}
-
-pub struct RichTextLayoutBuilder<'a> {
-    max_width: f32,
-    lines: Vec<Vec<TextChunk<'a>>>,
-    // Chunks in this incomplete line are positioned at
-    // the same y_offset as previous line, and need to be
-    // height adjusted afterwards.
-    // It is needed, since line height could not be computed
-    // until entire line is known.
-    current_line: Vec<TextChunk<'a>>,
+    /// x position in current line for left line of bounding box.
     x_offset: f32,
+    /// y position of current line from top line of bounding box.
     y_offset: f32,
-    split_policy: TextSplitPolicy,
-    chunk_spacing: f32,
-    line_spacing: f32,
-    justify: JustifyContent,
-    chunk_padding: f32,
+
+    align: AlignStrategy,
+    font_size: f32,
+
+    line_space: f32,
+    chunk_space: f32,
 }
 
-impl<'a> TextChunk<'a> {
-    fn height(&self) -> f32 {
-        self.font_size
-    }
-}
-
-#[derive(Copy, Clone)]
-pub enum TextSplitPolicy {
-    Words,
-    Chars,
-}
-
-impl TextSplitPolicy {
-    fn next<'a>(self, text: &'a str, offset: usize) -> usize {
-        let slice = &text[offset..];
-        let size = match self {
-            Self::Words => Self::next_word(slice),
-            Self::Chars => Self::next_char(slice),
-        };
-        size + offset
-    }
-
-    fn next_char(text: &str) -> usize {
-        text.chars().next().map(|c| c.len_utf8()).unwrap_or(0)
-    }
-
-    fn next_word(text: &str) -> usize {
-        let stripped = text.trim_start();
-        let spaces_skipped = text.len() - stripped.len();
-        let first_whitespace = stripped.char_indices().find(|(_, c)| c.is_whitespace());
-        if let Some((loc, _)) = first_whitespace {
-            spaces_skipped + loc
-        } else {
-            text.len()
-        }
-    }
-}
-
-pub struct Layout<'a> {
-    /// Total height taken by the layout bounding box.
-    pub height: f32,
-    /// Text lines
-    pub lines: Vec<Vec<TextChunk<'a>>>,
-}
-
-impl<'a> RichTextLayoutBuilder<'a> {
-    /// Lay out text
-    pub fn build(mut self, text: &'a RichText<'a>) -> Layout<'a> {
-        self.add_rich_text(text);
-        Layout {
-            height: self.y_offset,
-            lines: self.lines,
-        }
-    }
-
-    /// Construct new box layout with default parameters.
-    /// Box width is measured in Pt.
-    pub fn new(max_width: f32) -> Self {
-        Self {
-            max_width,
-            lines: vec![],
+impl<'a> SceneBuilder<'a> {
+    pub fn new(default_font: &'a Font, bounding_box: RectF) -> Self {
+        let mut result = Self {
+            chunks: vec![],
+            polygons: vec![],
             current_line: vec![],
+            bounding_box,
+            current_font: default_font,
             x_offset: 0.0,
             y_offset: 0.0,
-            split_policy: TextSplitPolicy::Words,
-            chunk_spacing: 0.0,
-            line_spacing: 0.0,
-            chunk_padding: 0.0,
-            justify: JustifyContent::AlignLeft,
+            align: AlignStrategy::AlignLeft,
+            font_size: 10.0,
+            line_space: 0.0,
+            chunk_space: 0.0,
+        };
+        result.set_default_chunk_space();
+        result
+    }
+
+    pub fn scene(self) -> Scene<'a> {
+        Scene {
+            polygons: self.polygons,
+            parts: self.chunks,
         }
     }
 
-    pub fn with_split_policy(mut self, policy: TextSplitPolicy) -> Self {
-        self.split_policy = policy;
+    pub fn is_out_of_bounds(&self) -> bool {
+        return self.y_offset >= self.bounding_box.height();
+    }
+
+    pub fn set_font(&mut self, font: &'a Font) -> &mut Self {
+        self.current_font = font;
         self
     }
 
-    pub fn with_justify(mut self, justify: JustifyContent) -> Self {
-        self.justify = justify;
+    pub fn set_line_space(&mut self, line_space: f32) -> &mut Self {
+        self.line_space = line_space;
         self
     }
 
-    pub fn with_chunk_spacing(mut self, spacing: f32) -> Self {
-        self.chunk_spacing = spacing;
+    pub fn get_font(&mut self) -> &'a Font {
+        self.current_font
+    }
+
+    pub fn set_font_size(&mut self, font_size: f32) -> &mut Self {
+        self.font_size = font_size;
         self
     }
 
-    pub fn with_line_spacing(mut self, spacing: f32) -> Self {
-        self.line_spacing = spacing;
+    pub fn set_alignment(&mut self, align: AlignStrategy) -> &mut Self {
+        self.align = align;
         self
     }
 
-    pub fn with_chunk_padding(mut self, padding: f32) -> Self {
-        self.chunk_padding = padding;
+    pub fn add_separator_line(&mut self) -> &mut Self {
+        self.finish_line();
+        self.y_offset += self.line_space * 2.0;
+        self.polygons.push(Polygon {
+            points: vec![
+                self.bounding_box.origin() + Vector2F::new(0.0, self.y_offset),
+                self.bounding_box.upper_right() + Vector2F::new(0.0, self.y_offset),
+            ],
+        });
+        self.y_offset += self.line_space;
         self
     }
 
-    fn add_rich_text(&mut self, text: &'a RichText<'a>) {
-        for part in &text.parts {
-            match part {
-                RichTextBlock::Text(text) => self.add_part(text),
-                RichTextBlock::LineBreak => self.finish_line(),
-            }
+    pub fn add_rect(&mut self, rect: RectF) -> &mut Self {
+        let rect = rect.contract(LINE_THICKNESS);
+        self.polygons.push(Polygon {
+            points: vec![
+                rect.origin(),
+                rect.upper_right(),
+                rect.lower_right(),
+                rect.lower_left(),
+                rect.origin(),
+            ],
+        });
+        self
+    }
+
+    pub fn add_boxed_text(&mut self, text: &'a str, padding: f32) -> &mut Self {
+        let text_width = self.get_text_width(text);
+        let width = text_width + 2.0 * padding;
+        if width > self.bounding_box.width() {
+            panic!(
+                "Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.",
+                max_width = self.bounding_box.width()
+            );
         }
-        if !self.current_line.is_empty() {
+        if width + self.x_offset > self.bounding_box.width() {
             self.finish_line();
         }
-        self.y_offset -= self.line_spacing;
+
+        let rect = RectF::new(
+            Vector2F::new(self.x_offset + padding, self.y_offset + padding),
+            Vector2F::new(text_width, self.font_size),
+        );
+        let block = Block::PaddedText {
+            chunk: TextChunk {
+                text: Cow::from(text),
+                rect,
+                font: self.current_font,
+                font_size: self.font_size,
+            },
+            padding,
+            border: true,
+        };
+        self.x_offset += width + self.chunk_space;
+        self.current_line.push(block);
+        self
     }
 
-    fn add_part(&mut self, part: &'a RichTextPart<'a>) {
-        let mut text = part.text.as_str().trim();
+    pub fn add_text<'b: 'a>(&mut self, text: impl Into<Cow<'b, str>>) -> &mut Self {
+        match text.into() {
+            Cow::Borrowed(text) => self.add_text_str(text),
+            Cow::Owned(text) => self.add_text_owned(text),
+        }
+    }
+
+    fn add_text_owned(&mut self, text: String) -> &mut Self {
+        let mut text = text.trim();
         while !text.is_empty() {
-            let (chunk, remaining) = self.split_chunk(part, text);
-            if let Some(chunk) = chunk {
-                self.x_offset += chunk.rect.width() + self.chunk_padding * 2.0 + self.chunk_spacing;
-                self.current_line.push(chunk);
+            let (chunk, remaining) = self.split_chunk(text);
+            if let Some(TextChunk {
+                text: chunk_text,
+                rect,
+                font,
+                font_size,
+            }) = chunk
+            {
+                let chunk_text: String = chunk_text.as_ref().to_string();
+                self.x_offset += rect.width() + self.chunk_space;
+                self.current_line.push(Block::Text(TextChunk {
+                    text: Cow::from(chunk_text),
+                    rect,
+                    font,
+                    font_size,
+                }));
                 text = remaining;
             } else {
                 if self.current_line.is_empty() {
-                    let chunk_text = &text[0..self.split_policy.next(text, 0)];
-                    let chunk_width = self.get_text_width(part, chunk_text);
-                    let x_offset = self.x_offset;
-                    panic!(
-                        "Cannot fit any characters from `{text}`. width: {width}, width(`{chunk_text}` = {chunk_width}), x_offset={x_offset}",
-                        width = self.max_width,
-                    );
+                    let text = &text[0..Self::next_word(text, 0)];
+                    let width = self.get_text_width(text);
+                    panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
                 } else {
                     self.finish_line();
                 }
             }
         }
+        self
     }
 
-    fn split_chunk(
-        &self,
-        part: &'a RichTextPart,
-        text: &'a str,
-    ) -> (Option<TextChunk<'a>>, &'a str) {
+    fn add_text_str(&mut self, text: &'a str) -> &mut Self {
+        let mut text = text.trim();
+        while !text.is_empty() {
+            let (chunk, remaining) = self.split_chunk(text);
+            if let Some(chunk) = chunk {
+                self.x_offset += chunk.rect.width() + self.chunk_space;
+                self.current_line.push(Block::Text(chunk));
+                text = remaining;
+            } else {
+                if self.current_line.is_empty() {
+                    let text = &text[0..Self::next_word(text, 0)];
+                    let width = self.get_text_width(text);
+                    panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
+                } else {
+                    self.finish_line();
+                }
+            }
+        }
+        self
+    }
+
+    pub fn set_default_chunk_space(&mut self) -> &mut Self {
+        self.chunk_space = self.get_char_width(' ');
+        self
+    }
+
+    pub fn set_chunk_space(&mut self, space: f32) -> &mut Self {
+        self.chunk_space = space;
+        self
+    }
+
+    fn get_char_width(&self, c: char) -> f32 {
+        self.current_font.char_width(c).unwrap_or(0.0) * self.current_font.scale(self.font_size)
+    }
+
+    fn split_chunk<'b>(&self, text: &'b str) -> (Option<TextChunk<'a, 'b>>, &'b str) {
         let text = text.trim();
         let mut offset = 0;
         let mut last_part = None;
         while offset < text.len() {
-            let new_offset = self.split_policy.next(text, offset);
-            let chunk = self.try_fit_chunk(part, &text[..new_offset]);
+            let new_offset = Self::next_word(text, offset);
+            let chunk = self.try_fit_chunk(&text[..new_offset]);
             if chunk.is_some() {
                 last_part = chunk;
                 offset = new_offset;
@@ -267,94 +302,195 @@ impl<'a> RichTextLayoutBuilder<'a> {
         (last_part, &text[offset..])
     }
 
-    fn get_text_width(&self, part: &'a RichTextPart, text: &'a str) -> f32 {
-        let result = text
-            .chars()
-            .map(|c| part.font.char_width(c).unwrap_or(0.0))
-            .sum::<f32>()
-            * part.font.scale(part.font_size);
-        result
+    fn get_text_width(&self, text: &'a str) -> f32 {
+        text.chars().map(|c| self.get_char_width(c)).sum::<f32>()
     }
 
-    fn try_fit_chunk(&self, part: &'a RichTextPart, text: &'a str) -> Option<TextChunk<'a>> {
-        let width = self.get_text_width(part, text);
-        if self.x_offset + 2.0 * self.chunk_padding + width > self.max_width {
+    fn try_fit_chunk<'b>(&self, text: &'b str) -> Option<TextChunk<'a, 'b>> {
+        let width = self.get_text_width(text);
+        if self.x_offset + width > self.bounding_box.size().x() {
             return None;
         }
-        let height = part.font_size;
+        let height = self.font_size;
 
         let rect = RectF::new(
-            Vector2F::new(
-                self.x_offset + self.chunk_padding,
-                self.y_offset + self.chunk_padding,
-            ),
+            Vector2F::new(self.x_offset, self.y_offset),
             Vector2F::new(width, height),
         );
         let result = TextChunk {
-            text,
+            text: Cow::from(text),
             rect,
-            font: part.font,
-            font_size: part.font_size,
+            font: self.current_font,
+            font_size: self.font_size,
         };
         Some(result)
     }
 
-    fn finish_line(&mut self) {
+    fn next_word(text: &str, offset: usize) -> usize {
+        let slice = &text[offset..];
+        let stripped = slice.trim_start();
+        let spaces_skipped = slice.len() - stripped.len();
+        let first_whitespace = stripped.char_indices().find(|(_, c)| c.is_whitespace());
+        if let Some((loc, _)) = first_whitespace {
+            offset + spaces_skipped + loc
+        } else {
+            text.len()
+        }
+    }
+
+    pub fn finish_line(&mut self) -> &mut Self {
+        if self.current_line.is_empty() {
+            return self;
+        }
         let mut line = vec![];
-        std::mem::swap(&mut line, &mut self.current_line);
+        std::mem::swap(&mut self.current_line, &mut line);
         let max_height = self.align_line_y(&mut line);
-        match self.justify {
-            JustifyContent::AlignLeft => {}
-            JustifyContent::AlignRight => {
+        match self.align {
+            AlignStrategy::AlignLeft => {}
+            AlignStrategy::AlignRight => {
                 self.align_line_right(&mut line);
             }
-            JustifyContent::JustifyEven => {
+            AlignStrategy::JustifyEven => {
                 self.justify_line_even(&mut line);
             }
         }
-        self.lines.push(line);
+        for block in line {
+            self.add_block(block);
+        }
         self.x_offset = 0.0;
-        self.y_offset += max_height + 2.0 * self.chunk_padding + self.line_spacing;
+        self.y_offset += max_height + self.line_space;
+        self
     }
 
-    fn align_line_y(&self, line: &mut [TextChunk]) -> f32 {
+    fn add_block(&mut self, block: Block<'a>) {
+        match block {
+            Block::Text(chunk) => self.chunks.push(chunk),
+            Block::PaddedText {
+                chunk,
+                padding,
+                border,
+            } => {
+                if border {
+                    self.add_rect(chunk.rect.dilate(padding));
+                }
+                self.chunks.push(chunk);
+            }
+        }
+    }
+
+    fn align_line_y(&self, line: &mut [Block<'a>]) -> f32 {
         let max_height = line
             .iter()
             .map(|chunk| chunk.height())
             .fold(0.0f32, |l, r| l.max(r));
 
+        let bottom_line = self.y_offset + max_height;
+
         for chunk in line {
-            let old_origin = chunk.rect.origin();
-            let y = old_origin.y() + max_height - chunk.rect.height(); // Align text by bottom line.
-            set_origin_y(&mut chunk.rect, y);
+            chunk.align_to_bottom_line(bottom_line);
         }
 
         max_height
     }
 
-    fn align_line_right(&self, line: &mut [TextChunk]) {
-        let mut x = self.max_width;
+    fn align_line_right(&self, line: &mut [Block<'a>]) {
+        let mut x = self.bounding_box.width();
         for chunk in line.iter_mut().rev() {
-            x -= chunk.rect.width();
-            set_origin_x(&mut chunk.rect, x);
-            dbg!(x, &chunk);
-            x -= self.chunk_spacing;
+            x -= chunk.width();
+            chunk.align_to_left_line(x);
+            x -= self.chunk_space;
         }
     }
 
-    fn justify_line_even(&self, line: &mut [TextChunk]) {
-        if line.len() <= 2 {
+    fn justify_line_even(&self, line: &mut [Block<'a>]) {
+        if line.len() < 2 {
             return;
         }
         let total_spacing =
-            self.max_width - line.iter().map(|chunk| chunk.rect.width()).sum::<f32>();
+            self.bounding_box.width() - line.iter().map(|chunk| chunk.width()).sum::<f32>();
         let spacing = total_spacing / (line.len() - 1) as f32;
         let mut x = 0.0;
         for chunk in line {
-            set_origin_x(&mut chunk.rect, x);
-            x += chunk.rect.width() + spacing;
+            chunk.align_to_left_line(x);
+            x += chunk.width() + spacing;
         }
     }
+}
+
+/// Part of rich text, positioned
+/// within layout, and ready for rendering.
+pub struct TextChunk<'a, 'b> {
+    pub text: Cow<'b, str>,
+    pub rect: RectF,
+    pub font: &'a Font,
+    pub font_size: f32,
+}
+
+pub enum Block<'a> {
+    Text(TextChunk<'a, 'a>),
+    PaddedText {
+        chunk: TextChunk<'a, 'a>,
+        padding: f32,
+        border: bool,
+    },
+}
+
+impl<'a> Block<'a> {
+    fn height(&self) -> f32 {
+        match self {
+            Self::Text(chunk) => chunk.rect.height(),
+            Self::PaddedText { chunk, padding, .. } => chunk.rect.height() + 2.0 * padding,
+        }
+    }
+
+    fn width(&self) -> f32 {
+        match self {
+            Self::Text(chunk) => chunk.rect.width(),
+            Self::PaddedText { chunk, padding, .. } => chunk.rect.width() + 2.0 * padding,
+        }
+    }
+
+    fn align_to_left_line(&mut self, x_offset: f32) {
+        match self {
+            Self::Text(chunk) => {
+                set_origin_x(&mut chunk.rect, x_offset);
+            }
+            Self::PaddedText { chunk, padding, .. } => {
+                set_origin_x(&mut chunk.rect, x_offset + *padding);
+            }
+        }
+    }
+
+    fn align_to_bottom_line(&mut self, y_offset: f32) {
+        match self {
+            Self::Text(chunk) => {
+                let height = chunk.rect.height();
+                set_origin_y(&mut chunk.rect, y_offset - height);
+            }
+            Self::PaddedText { chunk, padding, .. } => {
+                let height = chunk.rect.height();
+                set_origin_y(&mut chunk.rect, y_offset - height - *padding);
+            }
+        }
+    }
+}
+
+impl<'a, 'b> fmt::Debug for TextChunk<'a, 'b> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TextChunk(text={text:#?}, rect={rect:#?})",
+            text = self.text,
+            rect = self.rect
+        )
+    }
+}
+
+pub enum AlignStrategy {
+    AlignLeft,
+    #[allow(dead_code)]
+    AlignRight,
+    JustifyEven,
 }
 
 fn set_origin_x(rect: &mut RectF, x: f32) {

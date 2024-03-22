@@ -144,4 +144,14 @@ impl Actions {
             _ => Ok(Self::Other(source)),
         }
     }
+
+    pub fn as_str(&self) -> Option<&'static str> {
+        match self {
+            Actions::Reaction => Some("5"),
+            Actions::Number(3) => Some("3"),
+            Actions::Number(2) => Some("2"),
+            Actions::Number(1) => Some("1"),
+            _ => None,
+        }
+    }
 }
