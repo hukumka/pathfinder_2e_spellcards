@@ -1,5 +1,6 @@
 mod json_utils;
 mod render;
+mod rich_text;
 mod spell;
 
 use json_utils::JsonValueExt;
@@ -13,6 +14,6 @@ fn main() -> anyhow::Result<()> {
         .map(|obj| Spell::parse(obj.as_object()?))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    write_to_pdf(std::fs::File::create("output.pdf")?, &spells)?;
+    write_to_pdf(std::fs::File::create("output.pdf")?, &spells[0..10])?;
     Ok(())
 }

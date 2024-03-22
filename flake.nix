@@ -43,7 +43,7 @@
               pkg-config
               fontconfig.dev
               rust-analyzer-unwrapped
-              rust-bin.stable.${rustVersion}.default
+              (rust-bin.stable.${rustVersion}.default.override { extensions = [ "rust-src" ]; })
             ];
           };
         };
