@@ -1,5 +1,7 @@
+use crate::markdown::{render_rich_text, MdConfig};
 use crate::rich_text::{
-    Font, JustifyContent, Layout, RichText, RichTextLayoutBuilder, RichTextPart, TextChunk,
+    Font, JustifyContent, Layout, RichText, RichTextBlock, RichTextLayoutBuilder, RichTextPart,
+    TextChunk,
 };
 use crate::spell::{Property, Spell};
 use anyhow::{anyhow, Result};
@@ -17,7 +19,7 @@ use std::io::{BufWriter, Write};
 const A4_WIDTH: f32 = 210.0;
 const A4_HEIGHT: f32 = 297.0;
 const CARD_WIDTH: f32 = 65.0;
-const CARD_HEIGHT: f32 = 90.0;
+const CARD_HEIGHT: f32 = 95.0;
 
 const GRID_WIDTH: usize = 3;
 const GRID_HEIGHT: usize = 3;
@@ -40,17 +42,19 @@ pub fn write_to_pdf<T: Write>(output: T, spells: &[Spell]) -> Result<()> {
     let (mut doc, page1, layer1) =
         PdfDocument::new("Spells", Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer1");
 
-    let card_font =
-        Font::add_helvetica(&mut doc, false).map_err(|e| e.context("Unable to load Helvetica"))?;
+    let card_font = Font::add_helvetica(&mut doc, printpdf::BuiltinFont::Helvetica)
+        .map_err(|e| e.context("Unable to load Helvetica"))?;
 
-    let card_font_bold =
-        Font::add_helvetica(&mut doc, true).map_err(|e| e.context("Unable to load Helvetica"))?;
+    let card_font_bold = Font::add_helvetica(&mut doc, printpdf::BuiltinFont::HelveticaBold)
+        .map_err(|e| e.context("Unable to load Helvetica"))?;
+
+    let card_font_italic = Font::add_helvetica(&mut doc, printpdf::BuiltinFont::HelveticaOblique)
+        .map_err(|e| e.context("Unable to load Helvetica"))?;
 
     let action_count_font = Font::add_external_font(&mut doc, &"static/Pathfinder2eActions.ttf")
         .map_err(|e| e.context("Unable to load Pathfinder Icons font"))?;
 
     let layer = doc.get_page(page1).get_layer(layer1);
-    let chunks_size = GRID_HEIGHT * GRID_WIDTH;
 
     // Reuse card context
     let mut context = PageRenderingContext {
@@ -58,46 +62,67 @@ pub fn write_to_pdf<T: Write>(output: T, spells: &[Spell]) -> Result<()> {
         layer,
         card_font,
         card_font_bold,
+        card_font_italic,
         offset: Point::new(Mm(0.0), Mm(0.0)),
     };
+    let mut errors = vec![];
 
-    write_page(&mut context, &spells[..chunks_size])?;
-    for chunk in spells[chunks_size..].chunks(GRID_HEIGHT * GRID_WIDTH) {
-        let (page_index, layer_index) = doc.add_page(Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer");
-        context.layer = doc.get_page(page_index).get_layer(layer_index);
-        write_page(&mut context, chunk)?;
+    let positions = (0..GRID_HEIGHT)
+        .flat_map(|y| (0..GRID_WIDTH).map(move |x| (x, y)))
+        .collect::<Vec<_>>();
+    let mut positions_iter = positions.iter().cloned();
+    let mut position = positions_iter.next().unwrap();
+    init_page(&mut context);
+    for spell in spells {
+        context.set_offset(position);
+        if let Ok(()) = write_spell(&mut context, spell) {
+            if let Some(new_position) = positions_iter.next() {
+                position = new_position;
+            } else {
+                // Start new page
+                let (page_index, layer_index) = doc.add_page(Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer");
+                context.layer = doc.get_page(page_index).get_layer(layer_index);
+                init_page(&mut context);
+                positions_iter = positions.iter().cloned();
+                position = positions_iter.next().unwrap();
+            }
+        } else {
+            errors.push(spell.name.clone());
+        }
     }
 
-    doc.save(&mut BufWriter::new(output))?;
-    Ok(())
+    if errors.is_empty() {
+        doc.save(&mut BufWriter::new(output))?;
+        Ok(())
+    } else {
+        Err(anyhow!("failed spells: {:#?}", errors))
+    }
 }
 
 /// Holds all nessesary references needed to draw single spell card.
 struct PageRenderingContext {
     card_font: Font,
     card_font_bold: Font,
+    card_font_italic: Font,
     action_count_font: Font,
     layer: PdfLayerReference,
     offset: Point,
 }
 
-/// Fill page with `spells`
-fn write_page(layer: &mut PageRenderingContext, spells: &[Spell]) -> Result<()> {
+impl PageRenderingContext {
+    fn set_offset(&mut self, (y, x): (usize, usize)) {
+        self.offset = Point::new(
+            Mm(X_PADDING + (CARD_WIDTH + X_PADDING) * x as f32),
+            Mm(Y_PADDING + (CARD_HEIGHT + Y_PADDING) * (GRID_HEIGHT - 1 - y) as f32),
+        );
+    }
+}
+
+fn init_page(layer: &mut PageRenderingContext) {
     layer
         .layer
         .set_outline_color(Color::Rgb(Rgb::new(0.0, 0.0, 0.0, None)));
     layer.layer.set_outline_thickness(0.0);
-    let position = (0..GRID_HEIGHT).flat_map(|y| (0..GRID_WIDTH).map(move |x| (x, y)));
-    for ((x, y), spell) in position.zip(spells) {
-        let y = 2 - y;
-        let offset = Point::new(
-            Mm(X_PADDING + (CARD_WIDTH + X_PADDING) * x as f32),
-            Mm(Y_PADDING + (CARD_HEIGHT + Y_PADDING) * y as f32),
-        );
-        layer.offset = offset;
-        write_spell(layer, spell)?;
-    }
-    Ok(())
 }
 
 /// Write spell
@@ -111,6 +136,7 @@ fn write_spell(layer: &mut PageRenderingContext, spell: &Spell) -> Result<()> {
     }
     height += draw_separator_line(layer, height);
     height += draw_description(layer, height, spell);
+    height += draw_heightened(layer, height, spell);
 
     if height >= mm_to_pt(CARD_HEIGHT_INNER) {
         Err(anyhow!(
@@ -125,21 +151,21 @@ fn write_spell(layer: &mut PageRenderingContext, spell: &Spell) -> Result<()> {
 fn draw_header(layer: &mut PageRenderingContext, height: f32, spell: &Spell) -> f32 {
     let text = RichText {
         parts: vec![
-            RichTextPart {
+            RichTextBlock::Text(RichTextPart {
                 text: spell.name.clone(),
                 font: &layer.card_font,
                 font_size: 12.0,
-            },
-            RichTextPart {
+            }),
+            RichTextBlock::Text(RichTextPart {
                 text: "2".to_string(),
                 font: &layer.action_count_font,
                 font_size: 14.0,
-            },
-            RichTextPart {
+            }),
+            RichTextBlock::Text(RichTextPart {
                 text: format!("{}", spell.level),
                 font: &layer.card_font,
                 font_size: 12.0,
-            },
+            }),
         ],
     };
     let layout = default_layout()
@@ -153,10 +179,12 @@ fn draw_traits(layer: &mut PageRenderingContext, height: f32, spell: &Spell) -> 
         parts: spell
             .traits
             .iter()
-            .map(|t| RichTextPart {
-                text: t.clone(),
-                font: &layer.card_font,
-                font_size: 8.0,
+            .map(|t| {
+                RichTextBlock::Text(RichTextPart {
+                    text: t.clone(),
+                    font: &layer.card_font,
+                    font_size: 8.0,
+                })
             })
             .collect(),
     };
@@ -171,16 +199,16 @@ fn draw_traits(layer: &mut PageRenderingContext, height: f32, spell: &Spell) -> 
 fn draw_property(layer: &mut PageRenderingContext, height: f32, property: &Property) -> f32 {
     let text = RichText {
         parts: vec![
-            RichTextPart {
+            RichTextBlock::Text(RichTextPart {
                 text: property.name.clone(),
                 font: &layer.card_font_bold,
-                font_size: 9.0,
-            },
-            RichTextPart {
+                font_size: 8.5,
+            }),
+            RichTextBlock::Text(RichTextPart {
                 text: property.value.clone(),
                 font: &layer.card_font,
-                font_size: 9.0,
-            },
+                font_size: 8.5,
+            }),
         ],
     };
     let layout = default_layout()
@@ -213,11 +241,36 @@ fn draw_separator_line(layer: &mut PageRenderingContext, mut height: f32) -> f32
 }
 
 fn draw_description(layer: &mut PageRenderingContext, height: f32, spell: &Spell) -> f32 {
-    0.0
+    let md_config = MdConfig {
+        text_font: &layer.card_font,
+        bold_font: &layer.card_font_bold,
+        italic_font: &layer.card_font_italic,
+        text_size: 8.5,
+    };
+    let text = render_rich_text(&md_config, &spell.description);
+    let layout = default_layout().build(&text);
+    draw_layouted(&mut layer.layer, layer.offset, height, &layout) + mm_to_pt(SECTION_DISTANCE)
 }
 
 fn draw_heightened(layer: &mut PageRenderingContext, height: f32, spell: &Spell) -> f32 {
-    0.0
+    let heightened = if let Some(heightened) = &spell.heightened {
+        heightened
+    } else {
+        return 0.0;
+    };
+    let height = draw_separator_line(layer, height);
+
+    let md_config = MdConfig {
+        text_font: &layer.card_font,
+        bold_font: &layer.card_font_bold,
+        italic_font: &layer.card_font_italic,
+        text_size: 8.5,
+    };
+    let text = render_rich_text(&md_config, heightened);
+    let layout = default_layout().build(&text);
+    height
+        + draw_layouted(&mut layer.layer, layer.offset, height, &layout)
+        + mm_to_pt(SECTION_DISTANCE)
 }
 
 fn default_layout<'a>() -> RichTextLayoutBuilder<'a> {

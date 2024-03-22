@@ -14,15 +14,12 @@ pub struct Font {
 
 impl Font {
     /// Add Helvetica font to document, and construct reference to it.
-    pub fn add_helvetica(doc: &mut PdfDocumentReference, is_bold: bool) -> Result<Self> {
-        let variant = if is_bold {
-            printpdf::BuiltinFont::HelveticaBold
-        } else {
-            printpdf::BuiltinFont::Helvetica
-        };
-
+    pub fn add_helvetica(
+        doc: &mut PdfDocumentReference,
+        font: printpdf::BuiltinFont,
+    ) -> Result<Self> {
         let font_ref = doc
-            .add_builtin_font(variant)
+            .add_builtin_font(font)
             .map_err(|e| anyhow::Error::from(e).context("Unable to load font ref"))?;
 
         let font =
@@ -56,7 +53,12 @@ impl Font {
 }
 
 pub struct RichText<'a> {
-    pub parts: Vec<RichTextPart<'a>>,
+    pub parts: Vec<RichTextBlock<'a>>,
+}
+
+pub enum RichTextBlock<'a> {
+    Text(RichTextPart<'a>),
+    LineBreak,
 }
 
 pub struct RichTextPart<'a> {
@@ -208,7 +210,10 @@ impl<'a> RichTextLayoutBuilder<'a> {
 
     fn add_rich_text(&mut self, text: &'a RichText<'a>) {
         for part in &text.parts {
-            self.add_part(part);
+            match part {
+                RichTextBlock::Text(text) => self.add_part(text),
+                RichTextBlock::LineBreak => self.finish_line(),
+            }
         }
         if !self.current_line.is_empty() {
             self.finish_line();
@@ -217,7 +222,7 @@ impl<'a> RichTextLayoutBuilder<'a> {
     }
 
     fn add_part(&mut self, part: &'a RichTextPart<'a>) {
-        let mut text = part.text.as_str();
+        let mut text = part.text.as_str().trim();
         while !text.is_empty() {
             let (chunk, remaining) = self.split_chunk(part, text);
             if let Some(chunk) = chunk {
@@ -228,8 +233,9 @@ impl<'a> RichTextLayoutBuilder<'a> {
                 if self.current_line.is_empty() {
                     let chunk_text = &text[0..self.split_policy.next(text, 0)];
                     let chunk_width = self.get_text_width(part, chunk_text);
+                    let x_offset = self.x_offset;
                     panic!(
-                        "Cannot fit any characters from `{text}`. width: {width}, width(`{chunk_text}` = {chunk_width})",
+                        "Cannot fit any characters from `{text}`. width: {width}, width(`{chunk_text}` = {chunk_width}), x_offset={x_offset}",
                         width = self.max_width,
                     );
                 } else {

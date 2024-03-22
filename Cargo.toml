@@ -11,4 +11,5 @@ json = "0.12"
 printpdf = "0.7.0"
 font-kit = "0.12"
 pathfinder_geometry = "0.5"
+pulldown-cmark = "0.10"
 

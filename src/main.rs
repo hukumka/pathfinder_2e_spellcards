@@ -1,4 +1,5 @@
 mod json_utils;
+mod markdown;
 mod render;
 mod rich_text;
 mod spell;
@@ -14,6 +15,6 @@ fn main() -> anyhow::Result<()> {
         .map(|obj| Spell::parse(obj.as_object()?))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    write_to_pdf(std::fs::File::create("output.pdf")?, &spells[0..10])?;
+    write_to_pdf(std::fs::File::create("output.pdf")?, &spells)?;
     Ok(())
 }
