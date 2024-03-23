@@ -4,6 +4,8 @@ use font_kit::handle::Handle;
 use pathfinder_geometry::{rect::RectF, vector::Vector2F};
 use printpdf::{BuiltinFont, IndirectFontRef, PdfDocumentReference};
 use std::borrow::Cow;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::path::Path;
@@ -13,6 +15,8 @@ const LINE_THICKNESS: f32 = 1.0;
 pub struct Font {
     font: font::Font,
     font_ref: IndirectFontRef,
+    size_cache: RefCell<HashMap<char, Option<f32>>>,
+    units_per_em: f32,
 }
 
 impl Font {
@@ -30,7 +34,13 @@ impl Font {
             .map_err(|e| anyhow::Error::from(e).context("Unable to load font ref"))?;
 
         let font = Handle::from_path(AsRef::<Path>::as_ref(font_path).into(), 0).load()?;
-        Ok(Font { font, font_ref })
+        let units_per_em = font.metrics().units_per_em as f32;
+        Ok(Font {
+            font,
+            font_ref,
+            size_cache: RefCell::new(HashMap::new()),
+            units_per_em,
+        })
     }
 
     /// Add External font to document, and construct reference to it.
@@ -40,7 +50,13 @@ impl Font {
     ) -> Result<Self> {
         let font_ref = doc.add_external_font(File::open(path)?)?;
         let font = Handle::from_path(path.as_ref().into(), 0).load()?;
-        Ok(Font { font, font_ref })
+        let units_per_em = font.metrics().units_per_em as f32;
+        Ok(Font {
+            font,
+            font_ref,
+            size_cache: RefCell::new(HashMap::new()),
+            units_per_em,
+        })
     }
 
     pub fn font_ref(&self) -> &IndirectFontRef {
@@ -48,13 +64,18 @@ impl Font {
     }
 
     fn char_width(&self, c: char) -> Option<f32> {
+        let mut map = self.size_cache.borrow_mut();
+        if let Some(result) = map.get(&c) {
+            return *result;
+        }
         let glyph = self.font.glyph_for_char(c)?;
-        let offset = self.font.advance(glyph).ok()?;
-        Some(offset.x())
+        let result = self.font.advance(glyph).ok().map(|offset| offset.x());
+        map.insert(c, result);
+        result
     }
 
     fn scale(&self, size: f32) -> f32 {
-        size / (self.font.metrics().units_per_em as f32)
+        size / self.units_per_em
     }
 }
 
