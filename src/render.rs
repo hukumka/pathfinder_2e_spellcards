@@ -13,14 +13,18 @@ use std::io::{BufWriter, Write};
 // Everything is measured in Mm
 const A4_WIDTH: f32 = 210.0;
 const A4_HEIGHT: f32 = 297.0;
-const CARD_WIDTH: f32 = 65.0;
-const CARD_HEIGHT: f32 = 95.0;
+const CARD_WIDTH: f32 = 63.0;
+const CARD_HEIGHT: f32 = 88.0;
 
 const GRID_WIDTH: usize = 3;
 const GRID_HEIGHT: usize = 3;
 
-const X_PADDING: f32 = (A4_WIDTH - CARD_WIDTH * (GRID_WIDTH as f32)) / (GRID_WIDTH + 1) as f32;
-const Y_PADDING: f32 = (A4_HEIGHT - CARD_HEIGHT * (GRID_HEIGHT as f32)) / (GRID_HEIGHT + 1) as f32;
+const X_PADDING: f32 = 2.0;
+const Y_PADDING: f32 = 2.0;
+const X_PADDING_PAGE: f32 =
+    (A4_WIDTH - CARD_WIDTH * (GRID_WIDTH as f32) - X_PADDING * (GRID_WIDTH as f32 - 1.0)) * 0.5;
+const Y_PADDING_PAGE: f32 =
+    (A4_HEIGHT - CARD_HEIGHT * (GRID_HEIGHT as f32) - Y_PADDING * (GRID_HEIGHT as f32 - 1.0)) * 0.5;
 const MARGIN: f32 = 1.0;
 const CARD_WIDTH_INNER: f32 = CARD_WIDTH - 2.0 * MARGIN;
 const CARD_HEIGHT_INNER: f32 = CARD_HEIGHT - 2.0 * MARGIN;
@@ -110,7 +114,7 @@ fn build_spell_scene<'a>(config: &'a FontConfig<'a>, spell: &'a Spell) -> Result
         Vector2F::new(mm_to_pt(CARD_WIDTH_INNER), mm_to_pt(CARD_HEIGHT_INNER)),
     );
     let mut builder = SceneBuilder::<'a>::new(&config.md_config.text_font, rect);
-    builder.add_rect(rect.dilate(mm_to_pt(MARGIN)));
+    builder.add_rect(rect.dilate(mm_to_pt(MARGIN) + 1.0));
 
     builder
         .set_line_space(mm_to_pt(HEADER_LINE_SPACE))
@@ -173,10 +177,10 @@ fn build_spell_scene<'a>(config: &'a FontConfig<'a>, spell: &'a Spell) -> Result
     }
 }
 
-fn render_scene(layer: &mut PdfLayerReference, (y, x): (usize, usize), scene: &Scene) {
+fn render_scene(layer: &mut PdfLayerReference, (x, y): (usize, usize), scene: &Scene) {
     let offset = Point::new(
-        Mm(X_PADDING + (CARD_WIDTH + X_PADDING) * x as f32),
-        Mm(Y_PADDING + (CARD_HEIGHT + Y_PADDING) * (GRID_HEIGHT - 1 - y) as f32),
+        Mm(X_PADDING_PAGE + (CARD_WIDTH + X_PADDING) * x as f32),
+        Mm(Y_PADDING_PAGE + (CARD_HEIGHT + Y_PADDING) * (GRID_HEIGHT - 1 - y) as f32),
     );
     for chunk in &scene.parts {
         draw_text(layer, offset, chunk);
