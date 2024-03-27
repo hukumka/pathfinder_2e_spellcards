@@ -109,8 +109,8 @@ fn build_pages<'a>(
         match build_spell_scene(font_config, spell) {
             Ok((scene, true)) => doubles.push(scene),
             Ok((scene, false)) => normal.push(scene),
-            Err(_) => {
-                eprintln!("Failed to load spell: {}", spell.name);
+            Err(error) => {
+                eprintln!("Failed to render spell: {}. {}", spell.name, error);
             }
         }
     }
