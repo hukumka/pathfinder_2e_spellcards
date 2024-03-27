@@ -1,34 +1,48 @@
 # Pathfinder 2e printable spell cards
 
+Generate spell cards in fixed format to form spellcaster deck.
+
+Currently supports two formats:
++ Normal: 6.3 cm x 8.8 cm
++ Double: 6.3 cm x 17.6 cm
+
+Format is chosen automatically. Normal is default, but for spells that do not fit generator falls back to double format. 
+
 ## State:
 
-Currently only very few spell have been added.
+Capable of rendering most spells.
 
-+ Cantrips: 5
-+ Level 1: 9
-+ Level 2-10: 0
-+ Focus spells: 0
+Spells that currently cannot be rendered due to being very long, and not fitting on double card format:
 
-Goals: add all spells from remaster player core, but completness is currently low priority.
-Though feel free to request extra spells in issues.
++ Umbral Extraction
++ Chromatic Wall
++ Mad Monkeys
++ Summon Elemental Herald
++ Element Embodied
++ Ooze Form
++ Summon Ancient Fleshforged
++ Illusory Creature
++ Summon Kaiju
++ Avatar
 
 ## Usage:
 
-Write list of spells to render in following format:
+Write list of spells to render in following format, and save in `spells.txt`:
 ```
-cantrips/divine_lance.html
-cantrips/needle_darts.html
-level1/heal.html
-level1/heal.html
+divine lance
+needle darts
+heal
+heal
 ```
 
 Run command generating spellcards:
 
 ```
-spellcard_generator < spells.txt > static/index.html
+spellcard_generator
 ```
 
-Open `static/index.html` in browser and select `Menu -> Print`.
+Output is stored in `output.pdf`
+
 
 ## Builing from source
 

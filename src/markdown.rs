@@ -1,6 +1,5 @@
 use crate::rich_text::{Font, SceneBuilder};
 use pulldown_cmark::{Event, Parser, Tag};
-use std::borrow::Cow;
 
 #[derive(Copy, Clone)]
 pub struct MdConfig<'a> {

@@ -2,7 +2,7 @@ use crate::json_utils::ObjectExt;
 use anyhow::{anyhow, Result};
 use json::object::Object;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Spell {
     pub name: String,
     pub level: u8,
@@ -16,20 +16,20 @@ pub struct Spell {
 }
 
 /// Various properties like area, target or distance
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Property {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SpellType {
     Spell,
     Focus,
     Cantrip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Actions {
     Number(u8),
     Reaction,
@@ -79,14 +79,16 @@ impl Spell {
     }
 
     fn parse_properties(object: &Object) -> Result<Vec<Property>> {
-        let direct_properties = &[
+        let str_properties = &[
             ("area", "Area"),
             ("duration_raw", "Duration"),
             ("target", "Target"),
             ("saving_throw", "Defence"),
+            ("range_raw", "Range"),
+            ("trigger", "Trigger"),
         ];
 
-        let result = direct_properties
+        let result = str_properties
             .iter()
             .filter_map(|(key, name)| Self::construct_propertry(object, key, name))
             .collect::<Result<Vec<Property>>>()?;
