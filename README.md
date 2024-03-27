@@ -8,6 +8,8 @@ Currently supports two formats:
 
 Format is chosen automatically. Normal is default, but for spells that do not fit generator falls back to double format. 
 
+![image](https://github.com/hukumka/pathfinder_2e_spellcards/assets/5196471/bea56a04-cf04-47f8-b3d1-44f80463f2aa)
+
 ## State:
 
 Capable of rendering most spells.
