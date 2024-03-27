@@ -143,6 +143,17 @@ impl<'a> SceneBuilder<'a> {
         }
     }
 
+    pub fn get_bounding_box(&self) -> RectF {
+        self.bounding_box
+    }
+
+    pub fn double_box(&mut self) {
+        self.bounding_box = RectF::new(
+            self.bounding_box.origin(),
+            Vector2F::new(self.bounding_box.width(), self.bounding_box.height() * 2.0),
+        );
+    }
+
     pub fn is_out_of_bounds(&self) -> bool {
         return self.y_offset >= self.bounding_box.height();
     }
@@ -447,6 +458,7 @@ pub struct TextChunk<'a, 'b> {
     pub font_size: f32,
 }
 
+#[derive(Debug)]
 pub enum Block<'a> {
     Text(TextChunk<'a, 'a>),
     PaddedText {

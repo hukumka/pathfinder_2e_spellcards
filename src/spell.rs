@@ -79,14 +79,16 @@ impl Spell {
     }
 
     fn parse_properties(object: &Object) -> Result<Vec<Property>> {
-        let direct_properties = &[
+        let str_properties = &[
             ("area", "Area"),
             ("duration_raw", "Duration"),
             ("target", "Target"),
             ("saving_throw", "Defence"),
+            ("range_raw", "Range"),
+            ("trigger", "Trigger"),
         ];
 
-        let result = direct_properties
+        let result = str_properties
             .iter()
             .filter_map(|(key, name)| Self::construct_propertry(object, key, name))
             .collect::<Result<Vec<Property>>>()?;

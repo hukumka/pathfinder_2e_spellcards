@@ -34,6 +34,8 @@ const LINE_SPACE: f32 = 0.5;
 const TRAIT_PADDING: f32 = 0.8;
 const TRAIT_CHUNK_SPACE: f32 = 0.3;
 
+const GENERAL_TEXT_FONT_SIZE: f32 = 7.7;
+
 #[derive(Copy, Clone)]
 struct FontConfig<'a> {
     md_config: MdConfig<'a>,
@@ -68,38 +70,75 @@ pub fn write_to_pdf<T: Write>(output: T, spells: &[Spell]) -> Result<()> {
 
     let mut layer = doc.get_page(page1).get_layer(layer1);
 
-    let mut errors = vec![];
-
-    let positions = (0..GRID_HEIGHT)
-        .flat_map(|y| (0..GRID_WIDTH).map(move |x| (x, y)))
-        .collect::<Vec<_>>();
-    let mut positions_iter = positions.iter().cloned();
-    let mut position = positions_iter.next().unwrap();
     init_page(&mut layer);
-    for spell in spells {
-        if let Ok(scene) = build_spell_scene(&font_config, spell) {
-            render_scene(&mut layer, position, &scene);
-            if let Some(new_position) = positions_iter.next() {
-                position = new_position;
-            } else {
-                // Start new page
-                let (page_index, layer_index) = doc.add_page(Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer");
-                layer = doc.get_page(page_index).get_layer(layer_index);
-                init_page(&mut layer);
-                positions_iter = positions.iter().cloned();
-                position = positions_iter.next().unwrap();
-            }
-        } else {
-            errors.push(spell.name.clone());
-        }
+    let pages = build_pages(&font_config, spells);
+    draw_page(&mut layer, &pages[..GRID_WIDTH]);
+    for page in pages[GRID_WIDTH..].chunks(GRID_WIDTH) {
+        let (page_index, layer_index) = doc.add_page(Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer");
+        layer = doc.get_page(page_index).get_layer(layer_index);
+        init_page(&mut layer);
+        draw_page(&mut layer, page);
     }
 
     doc.save(&mut BufWriter::new(output))?;
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(anyhow!("failed spells: {:#?}", errors))
+    Ok(())
+}
+
+fn draw_page(layer: &mut PdfLayerReference, page: &[[PageCell; GRID_HEIGHT]]) {
+    for (x, row) in page.iter().enumerate() {
+        for (y, scene) in row.iter().enumerate() {
+            if let PageCell::Filled(scene) = scene {
+                render_scene(layer, (x, y), &scene);
+            }
+        }
     }
+}
+
+pub enum PageCell<'a> {
+    Filled(Scene<'a>),
+    Empty,
+}
+
+fn build_pages<'a>(
+    font_config: &'a FontConfig<'a>,
+    spells: &'a [Spell],
+) -> Vec<[PageCell<'a>; GRID_HEIGHT]> {
+    let mut doubles = vec![];
+    let mut normal = vec![];
+    for spell in spells {
+        match build_spell_scene(font_config, spell) {
+            Ok((scene, true)) => doubles.push(scene),
+            Ok((scene, false)) => normal.push(scene),
+            Err(_) => {
+                eprintln!("Failed to load spell: {}", spell.name);
+            }
+        }
+    }
+
+    let mut pad: [PageCell; GRID_HEIGHT] = std::array::from_fn(|_| PageCell::Empty);
+    let mut pad_index = 0;
+    let mut result = vec![];
+
+    while !(doubles.is_empty() && normal.is_empty()) {
+        if pad_index + 2 <= GRID_HEIGHT && !doubles.is_empty() {
+            pad[pad_index] = PageCell::Filled(doubles.pop().unwrap());
+            pad_index += 2;
+        } else {
+            pad[pad_index] = PageCell::Filled(normal.pop().unwrap());
+            pad_index += 1;
+        }
+        if pad_index == GRID_HEIGHT {
+            pad_index = 0;
+            let mut tmp = std::array::from_fn(|_| PageCell::Empty);
+            std::mem::swap(&mut pad, &mut tmp);
+            result.push(tmp);
+        }
+    }
+    if pad_index > 0 {
+        result.push(pad);
+    }
+
+    result
 }
 
 fn init_page(layer: &mut PdfLayerReference) {
@@ -108,19 +147,21 @@ fn init_page(layer: &mut PdfLayerReference) {
 }
 
 /// Write spell
-fn build_spell_scene<'a>(config: &'a FontConfig<'a>, spell: &'a Spell) -> Result<Scene<'a>> {
+fn build_spell_scene<'a>(
+    config: &'a FontConfig<'a>,
+    spell: &'a Spell,
+) -> Result<(Scene<'a>, bool)> {
     let rect = RectF::new(
         Vector2F::zero(),
         Vector2F::new(mm_to_pt(CARD_WIDTH_INNER), mm_to_pt(CARD_HEIGHT_INNER)),
     );
     let mut builder = SceneBuilder::<'a>::new(&config.md_config.text_font, rect);
-    builder.add_rect(rect.dilate(mm_to_pt(MARGIN) + 1.0));
 
     builder
         .set_line_space(mm_to_pt(HEADER_LINE_SPACE))
         // Draw header
         .set_alignment(AlignStrategy::JustifyEven)
-        .set_font_size(12.0) // Name
+        .set_font_size(11.0) // Name
         .add_text(&spell.name);
 
     if let Some(action) = spell.actions.as_str() {
@@ -131,23 +172,20 @@ fn build_spell_scene<'a>(config: &'a FontConfig<'a>, spell: &'a Spell) -> Result
             .set_font(config.md_config.text_font);
     }
     builder
-        .set_font_size(12.0) // Spell level
+        .set_font_size(11.0) // Spell level
         .add_text(format!("{}", spell.level))
         .finish_line();
 
     // Draw traits
     builder
         .set_line_space(mm_to_pt(LINE_SPACE))
-        .set_font_size(8.0)
+        .set_font_size(GENERAL_TEXT_FONT_SIZE)
         .set_chunk_space(mm_to_pt(TRAIT_CHUNK_SPACE))
         .set_alignment(AlignStrategy::AlignLeft);
     for trait_ in &spell.traits {
         builder.add_boxed_text(trait_.as_str(), mm_to_pt(TRAIT_PADDING));
     }
-    builder
-        .set_font_size(8.5)
-        .set_default_chunk_space()
-        .finish_line();
+    builder.set_default_chunk_space().finish_line();
     // Draw properties
     for property in &spell.properties {
         builder
@@ -158,7 +196,6 @@ fn build_spell_scene<'a>(config: &'a FontConfig<'a>, spell: &'a Spell) -> Result
             .finish_line();
     }
     builder.add_separator_line();
-    builder.set_font_size(8.5);
     builder.add_markdown(&config.md_config, &spell.description);
     if let Some(heighened) = &spell.heightened {
         builder.add_separator_line();
@@ -166,6 +203,15 @@ fn build_spell_scene<'a>(config: &'a FontConfig<'a>, spell: &'a Spell) -> Result
             .add_markdown(&config.md_config, heighened.as_str())
             .finish_line();
     }
+    builder.finish_line();
+
+    let is_double = if builder.is_out_of_bounds() {
+        builder.double_box();
+        true
+    } else {
+        false
+    };
+    builder.add_rect(builder.get_bounding_box().dilate(mm_to_pt(MARGIN) + 1.0));
 
     if builder.is_out_of_bounds() {
         Err(anyhow!(
@@ -173,7 +219,7 @@ fn build_spell_scene<'a>(config: &'a FontConfig<'a>, spell: &'a Spell) -> Result
             spell_name = spell.name
         ))
     } else {
-        Ok(builder.scene())
+        Ok((builder.scene(), is_double))
     }
 }
 
