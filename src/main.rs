@@ -3,6 +3,7 @@ mod markdown;
 mod render;
 mod rich_text;
 mod spell;
+mod db;
 
 use std::collections::HashMap;
 

@@ -13,6 +13,14 @@ pub struct Spell {
     pub description: String,
     pub heightened: Option<String>,
     pub extras: Vec<String>,
+    pub traditions: Traditions,
+}
+
+pub struct Traditions {
+    pub is_arcane: bool,
+    pub is_primal: bool,
+    pub is_divine: bool,
+    pub is_occult: bool,
 }
 
 /// Various properties like area, target or distance
@@ -52,6 +60,7 @@ impl Spell {
             .map_err(|err| err.context("Unable to parse Spell."))?;
         let (description, heightened, extras) =
             Self::parse_markdown(&object.get_typed::<String>("markdown")?)?;
+        let traditions = Traditions::parse(object.get_typed::<Vec<String>>("tradition")?);
 
         Ok(Spell {
             name,
@@ -63,6 +72,7 @@ impl Spell {
             description,
             heightened,
             extras,
+            traditions,
         })
     }
 
@@ -122,6 +132,34 @@ impl Spell {
             }
         }
         Ok(traits)
+    }
+}
+
+impl Traditions {
+    fn parse(traditions: Vec<String>) -> Self {
+        let mut result = Self {
+            is_arcane: false,
+            is_primal: false,
+            is_divine: false,
+            is_occult: false,
+        };
+        for tradition in &traditions {
+            match tradition.as_str() {
+                "Arcane" => {
+                    result.is_arcane = true;
+                }
+                "Primal" => {
+                    result.is_primal = true;
+                }
+                "Occult" => {
+                    result.is_occult = true;
+                }
+                "Divine" => {
+                    result.is_divine = true;
+                }
+            }
+        }
+        result
     }
 }
 
