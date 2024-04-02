@@ -1,9 +1,10 @@
 use crate::json_utils::ObjectExt;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use json::object::Object;
 
 #[derive(Debug, Clone)]
 pub struct Spell {
+    pub id: usize,
     pub name: String,
     pub level: u8,
     pub spell_type: SpellType,
@@ -11,11 +12,13 @@ pub struct Spell {
     pub actions: Actions,
     pub properties: Vec<Property>,
     pub description: String,
+    pub summary: String,
     pub heightened: Option<String>,
     pub extras: Vec<String>,
     pub traditions: Traditions,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Traditions {
     pub is_arcane: bool,
     pub is_primal: bool,
@@ -60,9 +63,14 @@ impl Spell {
             .map_err(|err| err.context("Unable to parse Spell."))?;
         let (description, heightened, extras) =
             Self::parse_markdown(&object.get_typed::<String>("markdown")?)?;
-        let traditions = Traditions::parse(object.get_typed::<Vec<String>>("tradition")?);
+        let traditions = Traditions::parse(
+            object
+                .get_typed_maybe::<Vec<String>>("tradition")?
+                .unwrap_or(vec![]),
+        );
 
         Ok(Spell {
+            id: Self::parse_id(object)?,
             name,
             level: object.get_typed("level")?,
             spell_type: SpellType::parse(&object.get_typed::<String>("category")?)?,
@@ -70,10 +78,19 @@ impl Spell {
             actions: Actions::parse(object.get_typed::<String>("actions")?)?,
             properties: Self::parse_properties(object)?,
             description,
+            summary: object.get_typed::<String>("summary")?,
             heightened,
             extras,
             traditions,
         })
+    }
+
+    fn parse_id(object: &Object) -> Result<usize> {
+        let id = object.get_typed::<String>("id")?;
+        if !id.starts_with("spell-") {
+            bail!("Invalid Id format!");
+        }
+        Ok(id[6..].parse()?)
     }
 
     fn parse_markdown(markdown: &str) -> Result<(String, Option<String>, Vec<String>)> {
@@ -157,6 +174,7 @@ impl Traditions {
                 "Divine" => {
                     result.is_divine = true;
                 }
+                _ => {}
             }
         }
         result

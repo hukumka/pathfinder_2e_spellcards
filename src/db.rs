@@ -1,19 +1,20 @@
 use crate::json_utils::JsonValueExt;
 use crate::spell::{Spell, Traditions};
 use anyhow::Result;
+use std::rc::Rc;
 use std::{fs::read_to_string, path::Path};
 
-#[derive(Copy, Clone)]
-pub struct Query<'a> {
-    name_query: &'a str,
-    spell_rank: Option<u8>,
-    is_arcane: bool,
-    is_primal: bool,
-    is_divine: bool,
-    is_occult: bool,
+#[derive(Debug, Clone, Default)]
+pub struct Query {
+    pub name_query: String,
+    pub spell_rank: Option<u8>,
+    pub is_arcane: bool,
+    pub is_primal: bool,
+    pub is_divine: bool,
+    pub is_occult: bool,
 }
 
-impl<'a> Query<'a> {
+impl Query {
     fn test(&self, spell: &Spell) -> bool {
         self.test_name(&spell.name)
             && self.test_rank(spell.level)
@@ -29,19 +30,20 @@ impl<'a> Query<'a> {
     }
 
     fn test_name(&self, name: &str) -> bool {
-        name.contains(self.name_query)
+        name.contains(&self.name_query)
     }
 
     fn test_tradition(&self, traditions: &Traditions) -> bool {
-        (self.is_arcane && traditions.is_arcane)
-            || (self.is_divine && traditions.is_divine)
-            || (self.is_primal && traditions.is_primal)
-            || (self.is_occult && traditions.is_occult)
+        let is_mismatch = (self.is_arcane && !traditions.is_arcane)
+            || (self.is_divine && !traditions.is_divine)
+            || (self.is_primal && !traditions.is_primal)
+            || (self.is_occult && !traditions.is_occult);
+        !is_mismatch
     }
 }
 
 pub trait SpellDB {
-    fn search<'a>(&self, query: Query<'a>) -> Vec<Spell>;
+    fn search(&self, query: &Query) -> Vec<Rc<Spell>>;
 }
 
 /// Simplest possible implementation of spell database. Hella inefficient.
@@ -50,7 +52,7 @@ pub struct SimpleSpellDB {
 }
 
 impl SimpleSpellDB {
-    fn new(path: impl AsRef<Path>) -> Result<Self> {
+    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
         let data = read_to_string(path)?;
         let spells = json::parse(&data)?
             .as_array()?
@@ -62,11 +64,11 @@ impl SimpleSpellDB {
 }
 
 impl SpellDB for SimpleSpellDB {
-    fn search<'a>(&self, query: Query<'a>) -> Vec<Spell> {
+    fn search<'a>(&self, query: &Query) -> Vec<Rc<Spell>> {
         self.spells
             .iter()
             .filter(|spell| query.test(spell))
-            .cloned()
+            .map(|spell| Rc::new(spell.clone()))
             .collect()
     }
 }

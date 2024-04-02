@@ -2,50 +2,65 @@
   description = "Pathfinder 2e SpellCard generator";
 
   inputs = {
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-utils.follows = "flake-utils";
+      };
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-parts, ...}: 
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = nixpkgs.lib.systems.flakeExposed;
-      perSystem = {self', pkgs, system, ...}:
-        let
-          rustVersion = "1.70.0";
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [inputs.cargo2nix.overlays.default (import inputs.rust-overlay)];
-          };
-          rustPkgs = pkgs.rustBuilder.makePackageSet {
-            inherit rustVersion;
-            packageFun = import ./Cargo.nix;
+  outputs = {
+    self, nixpkgs, flake-utils, rust-overlay, crane
+  }: flake-utils.lib.eachDefaultSystem (system: 
+    let
+      rustVersion = "1.76.0";
+      overlays = [ (import rust-overlay) ];
+      pkgs = import nixpkgs {
+        inherit system overlays;
+      };
+      # build time dependencies
+      nativeBuildInputs = with pkgs; [
+        rustToolchain
+        pkg-config
+      ];
+      # run time dependencies 
+      buildInputs = with pkgs; [
+        fontconfig.dev
+        glib.dev
+        gtk4.dev
+      ];
+      # shell dependencies
+      devBuildInputs = with pkgs; [
+        rust-analyzer-unwrapped
+      ];
 
-            packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
-              (pkgs.rustBuilder.rustLib.makeOverride {
-                name = "yeslogic-fontconfig-sys";
-                overrideAttrs = drv: {
-                  propagatedNativeBuildInputs = drv.propagatedNativeBuildInputs or [ ] ++ [
-                    pkgs.fontconfig.dev
-                  ];
-                };
-              })
-            ];
-          };
-        in {
-          packages = rec {
-            spellcard_generator = (rustPkgs.workspace.spellcard_generator {}).bin;
-            default = spellcard_generator;
-          };
-          devShells.default = pkgs.mkShell {
-            buildInputs = with pkgs; [
-              pkg-config
-              fontconfig.dev
-              rust-analyzer-unwrapped
-              (rust-bin.stable.${rustVersion}.default.override { extensions = [ "rust-src" ]; })
-            ];
-          };
-        };
-    };
+      rustToolchain = 
+          (pkgs.rust-bin.stable.${rustVersion}.default.override { extensions = [ "rust-src" ]; });
+      craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+      src = craneLib.cleanCargoSource ./.;
+      commonArgs = {
+        inherit src nativeBuildInputs buildInputs;
+      };
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+      bin = craneLib.buildPackage (commonArgs // {inherit cargoArtifacts;});
+    in with pkgs; {
+      packages = {
+        inherit bin;
+        default = bin;
+      };
+      devShells.default = mkShell {
+        inputsFrom = [bin];
+        nativeBuildInputs = devBuildInputs;
+      };
+    });
 }
