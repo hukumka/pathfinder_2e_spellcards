@@ -1,12 +1,16 @@
+mod search_spells;
+mod selected_spell;
+
 use crate::db::{Query, SimpleSpellDB, SpellDB};
-use crate::render::{build_spell_scene, FontConfig, OwnedFontConfig};
-use crate::rich_text::{FontProvider, Scene, SceneBuilder};
+use crate::render::{build_spell_scene, OwnedFontConfig};
+use crate::rich_text::{FontProvider, Scene};
 use crate::spell::Spell;
-use gtk4::{gdk, gio, prelude::*, subclass::prelude::*, ApplicationWindow};
-use gtk4::{glib, Application, SingleSelection, Widget};
-use std::borrow::Borrow;
+use freetype::Library;
+use gtk4::{gdk, prelude::*, ApplicationWindow};
+use gtk4::{glib, Application, Widget};
+use search_spells::SpellCollection;
+use selected_spell::SelectedSpellCollection;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 const APP_ID: &str = "org.hukumka.SpellcardGenerator";
@@ -29,236 +33,113 @@ fn load_css() {
     );
 }
 
-// Spell list
-#[derive(Default)]
-struct SpellObjectImpl {
-    spell: RefCell<Option<Rc<Spell>>>,
-}
-
-#[glib::object_subclass]
-impl ObjectSubclass for SpellObjectImpl {
-    const NAME: &'static str = "SpellItem";
-    type Type = SpellObject;
-}
-
-impl ObjectImpl for SpellObjectImpl {
-    fn constructed(&self) {
-        self.parent_constructed();
-    }
-}
-
-glib::wrapper! {
-    struct SpellObject(ObjectSubclass<SpellObjectImpl>);
-}
-
-impl SpellObject {
-    fn new(spell: Rc<Spell>) -> Self {
-        let result: SpellObject = glib::Object::builder().build();
-        result.imp().spell.replace(Some(spell));
-        result
-    }
-
-    fn spell(&self) -> Rc<Spell> {
-        self.imp()
-            .spell
-            .clone()
-            .into_inner()
-            .expect("Must be initialized with a Spell")
-    }
-}
-
-/// Represent callbacks that can only be constructed after passing callback to a function.
 #[derive(Clone)]
-struct LateFunctionBind<T, Input> {
-    inner: Rc<RefCell<Option<T>>>,
-    _input: std::marker::PhantomData<Input>,
+struct AppState {
+    db: Rc<SimpleSpellDB>,
+    selected_spells: SelectedSpellCollection,
+    search_results: SpellCollection,
+    active_spell: Rc<RefCell<Option<Rc<Spell>>>>,
 }
 
-impl<T, Input> Default for LateFunctionBind<T, Input> {
-    fn default() -> Self {
-        LateFunctionBind {
-            inner: Rc::new(RefCell::new(None)),
-            _input: Default::default(),
-        }
-    }
-}
+impl AppState {
+    fn new(db: Rc<SimpleSpellDB>) -> (Self, impl IsA<Widget>) {
+        let (selected_spells, selected_spells_widget) = SelectedSpellCollection::new();
+        let (search_results, search_results_widget) = SpellCollection::new();
+        let active_spell = Rc::new(RefCell::new(None));
+        let result = Self {
+            db,
+            selected_spells,
+            search_results,
+            active_spell,
+        };
 
-impl<T, Input> LateFunctionBind<T, Input>
-where
-    T: Fn(&Input) + Clone,
-    Input: Clone,
-{
-    fn new() -> (Self, Self) {
-        let result = Self::default();
-        (result.clone(), result)
-    }
-
-    fn set_callback(&self, item: T) {
-        let mut inner = self.inner.borrow_mut();
-        *inner = Some(item);
+        let widget = result.build_widget(selected_spells_widget, search_results_widget);
+        (result, widget)
     }
 
-    fn call(&self, value: &Input) {
-        if let Some(func) = self.inner.as_ref().borrow().as_ref() {
-            func(value);
-        }
+    fn build_widget(
+        &self,
+        selected_spells: impl IsA<Widget>,
+        search_results: impl IsA<Widget>,
+    ) -> impl IsA<Widget> {
+        let layout = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .build();
+
+        let left_sidebar = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .css_classes(["search_sidebar"])
+            .build();
+
+        let app_state = self.clone();
+        left_sidebar.append(&build_search(move |query| {
+            let result = app_state.db.search(&query);
+            app_state.search_results.set_spells(&result);
+        }));
+        left_sidebar.append(&selected_spells);
+
+        let spell_preview_widget = self.build_search_preview_widget();
+        layout.append(&left_sidebar);
+        layout.append(&search_results);
+        layout.append(&spell_preview_widget);
+
+        self.connect_spell_activated(spell_preview_widget);
+        self.connect_spell_added();
+        self.connect_spell_removed();
+
+        return layout;
     }
-}
 
-struct SelectedSpell {
-    count: usize,
-    spell: Rc<Spell>,
-}
+    fn connect_spell_activated(&self, widget: impl IsA<Widget>) {
+        let active_spell = self.active_spell.clone();
+        self.search_results.connect_spell_selected(move |spell| {
+            active_spell.replace(Some(spell));
+            widget.queue_draw();
+        });
+    }
 
-struct SpellRepository {
-    spells: HashMap<usize, SelectedSpell>,
-    font_config: OwnedFontConfig<CairoFont>,
-    active: Option<Rc<Spell>>,
-}
+    fn connect_spell_added(&self) {
+        let selected_spells = self.selected_spells.clone();
+        let spell_added = move |spell: Rc<Spell>| {
+            selected_spells.add_spell(spell);
+        };
+        self.search_results.connect_spell_added(spell_added);
+    }
 
-impl SpellRepository {
-    fn new() -> Self {
-        let font_config =
-            OwnedFontConfig::<CairoFont>::new(&mut freetype::Library::init().unwrap())
-                .expect("Unable to initialize fonts");
-        let spells = HashMap::new();
-        Self {
-            spells,
-            font_config,
-            active: None,
-        }
+    fn connect_spell_removed(&self) {}
+
+    fn build_search_preview_widget(&self) -> impl IsA<Widget> {
+        let spell_preview = gtk4::DrawingArea::builder()
+            .width_request(400)
+            .hexpand(true)
+            .vexpand_set(true)
+            .build();
+
+        let active_spell = self.active_spell.clone();
+        let font_config: OwnedFontConfig<CairoFont> =
+            OwnedFontConfig::new(&mut Library::init().unwrap()).unwrap();
+
+        spell_preview.set_draw_func(move |_, context, w, h| {
+            if let Some(spell) = active_spell.as_ref().borrow().as_ref() {
+                let config = font_config.config();
+                let (scene, _) = build_spell_scene(&config, spell.as_ref())
+                    .expect("Scene must not be too large");
+                draw_scene(context, w, h, scene);
+            }
+        });
+        spell_preview
     }
 }
 
 fn build_ui(db: Rc<SimpleSpellDB>, app: &Application) {
-    let repository = Rc::new(RefCell::new(SpellRepository::new()));
-    let layout = gtk4::Box::builder()
-        .orientation(gtk4::Orientation::Horizontal)
-        .build();
-
-    let left_sidebar = gtk4::Box::builder()
-        .orientation(gtk4::Orientation::Vertical)
-        .css_classes(["search_sidebar"])
-        .build();
-
-    // Construct widget containing search results
-    let (on_result_select, on_result_select_pad) = LateFunctionBind::new();
-    let (search_result_model, search_result_widget) =
-        build_search_results_display(move |list_item| on_result_select.call(list_item));
-    update_search_results(db.clone(), search_result_model.clone(), Default::default());
-
-    // Construct search widget
-    left_sidebar.append(&build_search(move |query| {
-        update_search_results(db.clone(), search_result_model.clone(), query)
-    }));
-
-    // Construct spell preview widget
-    let spell_preview = gtk4::DrawingArea::builder()
-        .width_request(400)
-        .hexpand(true)
-        .vexpand_set(true)
-        .build();
-    let repository_moved = repository.clone();
-    spell_preview.set_draw_func(move |_, context, w, h| {
-        let repository = repository_moved.as_ref().borrow();
-        if let Some(spell) = repository.active.as_ref() {
-            let config = repository.font_config.config();
-            let (scene, _) =
-                build_spell_scene(&config, spell.as_ref()).expect("Scene must not be too large");
-            draw_scene(context, w, h, scene);
-        }
-    });
-
-    layout.append(&left_sidebar);
-    layout.append(&search_result_widget);
-    layout.append(&spell_preview);
-
-    on_result_select_pad.set_callback(move |item| {
-        if !item.is_selected() {
-            return;
-        }
-        if let Some(spell_object) = item.item().and_downcast::<SpellObject>() {
-            println!("Spell selected: {}", spell_object.spell().name);
-            repository.borrow_mut().active = Some(spell_object.spell());
-            spell_preview.queue_draw();
-        } else {
-        }
-    });
-
+    let (_, main_widget) = AppState::new(db);
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Spell Card generator")
-        .child(&layout)
+        .child(&main_widget)
         .build();
 
     window.present();
-}
-
-fn update_search_results(db: Rc<SimpleSpellDB>, model: gio::ListStore, query: Query) {
-    let items = db
-        .as_ref()
-        .search(&query)
-        .into_iter()
-        .map(SpellObject::new)
-        .collect::<Vec<_>>();
-    model.remove_all();
-    model.extend_from_slice(&items);
-}
-
-fn build_search_results_display(
-    on_select: impl Fn(&gtk4::ListItem) + Clone + 'static,
-) -> (gio::ListStore, impl IsA<Widget>) {
-    let model = gio::ListStore::new::<SpellObject>();
-    let factory = gtk4::SignalListItemFactory::new();
-    factory.connect_setup(move |_, list_item| {
-        let child = setup_spell_item_widget();
-        list_item.set_child(Some(&child));
-        list_item.connect_selected_notify(on_select.clone());
-    });
-    factory.connect_bind(move |_, list_item| {
-        let object = list_item
-            .item()
-            .and_downcast::<SpellObject>()
-            .expect("Must be SpellObject");
-        let child = list_item
-            .child()
-            .and_downcast::<SpellItemWidget>()
-            .expect("Must be SpellItemWidget");
-        bind_spell_item_widget_value(&child, &object);
-    });
-
-    let list_view = gtk4::ListView::builder()
-        .factory(&factory)
-        .model(&SingleSelection::new(Some(model.clone())))
-        .css_classes(["spells"])
-        .build();
-
-    let scrolled_list_view = gtk4::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk4::PolicyType::Never)
-        .min_content_width(250)
-        .width_request(250)
-        .child(&list_view)
-        .build();
-
-    (model, scrolled_list_view)
-}
-
-type SpellItemWidget = gtk4::Label;
-
-fn setup_spell_item_widget() -> SpellItemWidget {
-    gtk4::Label::new(None)
-}
-
-fn bind_spell_item_widget_value(widget: &SpellItemWidget, value: &SpellObject) {
-    widget.set_label(
-        &value
-            .imp()
-            .spell
-            .borrow()
-            .as_ref()
-            .map(|x| x.name.as_str())
-            .unwrap_or(""),
-    );
 }
 
 fn build_search(on_search: impl Fn(Query) + Clone + 'static) -> impl IsA<Widget> {
