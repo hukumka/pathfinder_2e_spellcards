@@ -9,8 +9,9 @@ edition = "2021"
 anyhow = "1.0"
 json = "0.12"
 printpdf = "0.7.0"
-font-kit = "0.12"
+freetype-rs = "0.35"
 pathfinder_geometry = "0.5"
 pulldown-cmark = "0.10"
-relm4 = "0.8"
+gtk4 = {version="0.8.1"}
+cairo-rs = {version="0.19", features = ["freetype"]}
 

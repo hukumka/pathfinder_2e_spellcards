@@ -23,7 +23,7 @@
     self, nixpkgs, flake-utils, rust-overlay, crane
   }: flake-utils.lib.eachDefaultSystem (system: 
     let
-      rustVersion = "1.76.0";
+      rustVersion = "1.77.2";
       overlays = [ (import rust-overlay) ];
       pkgs = import nixpkgs {
         inherit system overlays;
@@ -32,6 +32,7 @@
       nativeBuildInputs = with pkgs; [
         rustToolchain
         pkg-config
+        patchelf
       ];
       # run time dependencies 
       buildInputs = with pkgs; [
@@ -52,7 +53,10 @@
         inherit src nativeBuildInputs buildInputs;
       };
       cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-      bin = craneLib.buildPackage (commonArgs // {inherit cargoArtifacts;});
+      bin = craneLib.buildPackage (commonArgs // {
+        inherit cargoArtifacts;
+      });
+
     in with pkgs; {
       packages = {
         inherit bin;
@@ -60,7 +64,8 @@
       };
       devShells.default = mkShell {
         inputsFrom = [bin];
-        nativeBuildInputs = devBuildInputs;
+        buildInputs = devBuildInputs;
       };
+      
     });
 }

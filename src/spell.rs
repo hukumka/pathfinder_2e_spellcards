@@ -1,6 +1,7 @@
 use crate::json_utils::ObjectExt;
 use anyhow::{anyhow, bail, Result};
 use json::object::Object;
+use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
 pub struct Spell {
@@ -43,7 +44,9 @@ pub enum SpellType {
 #[derive(Debug, Clone)]
 pub enum Actions {
     Number(u8),
+    Range(u8, u8),
     Reaction,
+    FreeAction,
     Other(String),
 }
 
@@ -194,21 +197,54 @@ impl SpellType {
 
 impl Actions {
     fn parse(source: String) -> Result<Self> {
-        match source.as_str() {
-            "Reaction" => Ok(Self::Reaction),
-            "Singe Action" => Ok(Self::Number(1)),
-            "Two Actions" => Ok(Self::Number(2)),
-            "Three Actions" => Ok(Self::Number(3)),
-            _ => Ok(Self::Other(source)),
+        let result = Self::parse_range(&source)
+            .or_else(|| Self::numeric_parse(&source))
+            .unwrap_or_else(|| Self::Other(source));
+        Ok(result)
+    }
+
+    fn numeric_parse(source: &str) -> Option<Self> {
+        match source {
+            "Reaction" => Some(Self::Reaction),
+            "Single Action" => Some(Self::Number(1)),
+            "Two Actions" => Some(Self::Number(2)),
+            "Three Actions" => Some(Self::Number(3)),
+            "Free Action" => Some(Self::FreeAction),
+            _ => None,
         }
     }
 
-    pub fn as_str(&self) -> Option<&'static str> {
+    fn parse_range(source: &str) -> Option<Self> {
+        let mut parts: Vec<_> = source.split("to").collect();
+        if parts.len() != 2 {
+            parts = source.split("or").collect();
+        }
+        if parts.len() != 2 {
+            return None;
+        }
+        let left = Self::numeric_parse(parts[0].trim())?;
+        let right = Self::numeric_parse(parts[1].trim())?;
+        if let (Self::Number(from), Self::Number(to)) = (left, right) {
+            Some(Self::Range(from, to))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_str(&self) -> Option<Cow<'static, str>> {
         match self {
-            Actions::Reaction => Some("5"),
-            Actions::Number(3) => Some("3"),
-            Actions::Number(2) => Some("2"),
-            Actions::Number(1) => Some("1"),
+            Actions::Reaction => Some(Cow::Borrowed("5")),
+            Actions::FreeAction => Some(Cow::Borrowed("4")),
+            Actions::Number(x) => Self::number_as_str(*x).map(Cow::Borrowed),
+            _ => None,
+        }
+    }
+
+    pub fn number_as_str(num: u8) -> Option<&'static str> {
+        match num {
+            1 => Some("1"),
+            2 => Some("2"),
+            3 => Some("3"),
             _ => None,
         }
     }

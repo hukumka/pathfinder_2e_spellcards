@@ -7,11 +7,20 @@ mod rich_text;
 mod spell;
 
 use crate::db::SimpleSpellDB;
-use crate::gtk::App;
+use crate::gtk::run_gtk_app;
 
 fn main() -> anyhow::Result<()> {
-    let db = SimpleSpellDB::new("nethys_data/spells.json")?;
-    let app = relm4::RelmApp::new("hukumka.spellcard_generator");
-    app.run::<App>(db);
+    run_gtk_app(SimpleSpellDB::new("nethys_data/spells.json")?);
     Ok(())
+    // let db = SimpleSpellDB::new("nethys_data/spells.json")?;
+    // let spells = SimpleSpellDB::new("nethys_data/spells.json")?.search(&Query {
+    //     name_query: "hero".to_string(),
+    //     ..Query::default()
+    // });
+    // dbg!(&spells);
+    // write_to_pdf(
+    //     std::fs::File::create("output.pdf")?,
+    //     spells.iter().map(|s| s.as_ref()),
+    // )?;
+    // Ok(())
 }

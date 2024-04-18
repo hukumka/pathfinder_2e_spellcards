@@ -30,7 +30,8 @@ impl Query {
     }
 
     fn test_name(&self, name: &str) -> bool {
-        name.contains(&self.name_query)
+        name.to_lowercase()
+            .contains(&self.name_query.to_lowercase())
     }
 
     fn test_tradition(&self, traditions: &Traditions) -> bool {
