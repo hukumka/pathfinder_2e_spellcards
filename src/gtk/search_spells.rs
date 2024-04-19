@@ -66,6 +66,7 @@ glib::wrapper! {
 
 impl SpellRow {
     pub fn new(label: gtk4::Label, add_button: gtk4::Button) -> Self {
+        label.set_hexpand(true);
         let result: Self = glib::Object::builder().build();
         result.set_orientation(gtk4::Orientation::Horizontal);
         result.append(&label);

@@ -96,12 +96,14 @@ impl SelectedSpellRow {
         add_button: gtk4::Button,
         remove_button: gtk4::Button,
     ) -> Self {
+        label.set_hexpand(true);
+        count.set_width_request(40);
         let result: Self = glib::Object::builder().build();
         result.set_orientation(gtk4::Orientation::Horizontal);
         result.append(&label);
+        result.append(&remove_button);
         result.append(&count);
         result.append(&add_button);
-        result.append(&remove_button);
         result.set_label(label);
         result.set_count_label(count);
         result.set_add_button(add_button);
