@@ -28,17 +28,21 @@
       pkgs = import nixpkgs {
         inherit system overlays;
       };
+      inherit (pkgs) lib;
+      shareFilter = path: _type: null != builtins.match "^share" (builtins.trace path path);
+      sourceFilter = path: type: (shareFilter path type) || (craneLib.filterCargoSources path type);
       # build time dependencies
       nativeBuildInputs = with pkgs; [
         rustToolchain
         pkg-config
         patchelf
+        makeWrapper
       ];
       # run time dependencies 
       buildInputs = with pkgs; [
         fontconfig.dev
-        glib.dev
-        gtk4.dev
+        glib
+        gtk4
       ];
       # shell dependencies
       devBuildInputs = with pkgs; [
@@ -48,13 +52,18 @@
       rustToolchain = 
           (pkgs.rust-bin.stable.${rustVersion}.default.override { extensions = [ "rust-src" ]; });
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-      src = craneLib.cleanCargoSource ./.;
+      src = lib.cleanSourceWith { src = ./.; filter = sourceFilter; };
       commonArgs = {
         inherit src nativeBuildInputs buildInputs;
       };
+      # GTK requires prebuilt GSettings. XDG_DATA_DIRS is used to provide it with builtin settings.
+      gsettings_xdg_dir = "${pkgs.gtk4}/share/gsettings-schemas/gtk4-${pkgs.gtk4.version}";
       cargoArtifacts = craneLib.buildDepsOnly commonArgs;
       bin = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        postFixup = ''
+          wrapProgram $out/bin/spellcard_generator --prefix XDG_DATA_DIRS : ${gsettings_xdg_dir}/
+        '';
       });
 
     in with pkgs; {
@@ -65,6 +74,9 @@
       devShells.default = mkShell {
         inputsFrom = [bin];
         buildInputs = devBuildInputs;
+        shellHook = ''
+          export XDG_DATA_DIRS="${gsettings_xdg_dir}:$XDG_DATA_DIRS"
+        '';
       };
       
     });
