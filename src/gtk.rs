@@ -39,10 +39,11 @@ struct AppState {
     selected_spells: SelectedSpellCollection,
     search_results: SpellCollection,
     active_spell: Rc<RefCell<Option<Rc<Spell>>>>,
+    window: ApplicationWindow,
 }
 
 impl AppState {
-    fn new(db: Rc<SimpleSpellDB>) -> (Self, impl IsA<Widget>) {
+    fn new(db: Rc<SimpleSpellDB>, main_window: &ApplicationWindow) -> (Self, impl IsA<Widget>) {
         let (selected_spells, selected_spells_widget) = SelectedSpellCollection::new();
         let (search_results, search_results_widget) = SpellCollection::new();
         let active_spell = Rc::new(RefCell::new(None));
@@ -51,6 +52,7 @@ impl AppState {
             selected_spells,
             search_results,
             active_spell,
+            window: main_window.clone(),
         };
 
         let widget = result.build_widget(selected_spells_widget, search_results_widget);
@@ -95,23 +97,27 @@ impl AppState {
 
     fn connect_export_dialog(&self, button: gtk4::Button) {
         let selected_spells = self.selected_spells.clone();
+        let window = self.window.clone();
         button.connect_clicked(move |_| {
             let filter = gtk4::FileFilter::new();
             filter.add_suffix("pdf");
             filter.add_mime_type("pdf");
             let filters = gio::ListStore::new::<gtk4::FileFilter>();
             filters.append(&filter);
-            let window: Option<&gtk4::ApplicationWindow> = None;
             let cancelable: Option<&gio::Cancellable> = None;
             let selected_spells_moved = selected_spells.clone();
+            let window_moved = window.clone();
             gtk4::FileDialog::builder()
                 .title("Save as")
                 .filters(&filters)
                 .build()
-                .save(window, cancelable, move |file| {
-                    print!("File");
+                .save(Some(&window), cancelable, move |file| {
                     if let Err(error) = Self::save_selected_spells(file, &selected_spells_moved) {
-                        println!("{error}");
+                        gtk4::AlertDialog::builder()
+                            .detail(error.to_string())
+                            .message("Error then exporting")
+                            .build()
+                            .show(Some(&window_moved));
                     }
                 });
         });
@@ -173,12 +179,12 @@ impl AppState {
 }
 
 fn build_ui(db: Rc<SimpleSpellDB>, app: &Application) {
-    let (_, main_widget) = AppState::new(db);
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Spell Card generator")
-        .child(&main_widget)
         .build();
+    let (_, main_widget) = AppState::new(db, &window);
+    window.set_child(Some(&main_widget));
 
     window.present();
 }
