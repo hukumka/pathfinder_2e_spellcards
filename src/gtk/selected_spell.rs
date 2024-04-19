@@ -126,6 +126,20 @@ impl SelectedSpellCollection {
         (result, widget)
     }
 
+    pub fn collect_spells(&self) -> Vec<Rc<Spell>> {
+        let mut result = vec![];
+        let count = self.model.n_items();
+        for index in 0..count {
+            if let Some(spell_row) = self.model.item(index).and_downcast::<SelectedSpellModel>() {
+                let spell = spell_row.imp().spell();
+                for _ in 0..spell_row.count() {
+                    result.push(spell.clone());
+                }
+            }
+        }
+        result
+    }
+
     pub fn add_spell(&self, spell: Rc<Spell>) {
         let index = self.spell_index(spell.as_ref());
         if let Some(index) = index {
@@ -187,6 +201,9 @@ impl SelectedSpellCollection {
         let factory = SignalListItemFactory::new();
         let collection = self.clone();
         factory.connect_setup(move |_, list_item| {
+            let list_item = list_item
+                .downcast_ref::<gtk4::ListItem>()
+                .expect("Must be ListItem");
             let row_widget = collection.build_row_widget();
             list_item.set_child(Some(&row_widget));
 
@@ -210,6 +227,9 @@ impl SelectedSpellCollection {
             });
         });
         factory.connect_bind(move |_, list_item| {
+            let list_item = list_item
+                .downcast_ref::<gtk4::ListItem>()
+                .expect("Must be ListItem");
             let model = list_item
                 .item()
                 .and_downcast::<SelectedSpellModel>()
@@ -229,6 +249,9 @@ impl SelectedSpellCollection {
             child.set_binding(binding);
         });
         factory.connect_unbind(move |_, list_item| {
+            let list_item = list_item
+                .downcast_ref::<gtk4::ListItem>()
+                .expect("Must be ListItem");
             let child = list_item
                 .child()
                 .and_downcast::<SelectedSpellRow>()

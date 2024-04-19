@@ -2,11 +2,11 @@ mod search_spells;
 mod selected_spell;
 
 use crate::db::{Query, SimpleSpellDB, SpellDB};
-use crate::render::{build_spell_scene, OwnedFontConfig};
+use crate::render::{build_spell_scene, write_to_pdf, OwnedFontConfig};
 use crate::rich_text::{FontProvider, Scene};
 use crate::spell::Spell;
 use freetype::Library;
-use gtk4::{gdk, prelude::*, ApplicationWindow};
+use gtk4::{gdk, gio, prelude::*, ApplicationWindow};
 use gtk4::{glib, Application, Widget};
 use search_spells::SpellCollection;
 use selected_spell::SelectedSpellCollection;
@@ -77,6 +77,8 @@ impl AppState {
             app_state.search_results.set_spells(&result);
         }));
         left_sidebar.append(&selected_spells);
+        let export_button = gtk4::Button::builder().label("Export").build();
+        left_sidebar.append(&export_button);
 
         let spell_preview_widget = self.build_search_preview_widget();
         layout.append(&left_sidebar);
@@ -86,8 +88,47 @@ impl AppState {
         self.connect_spell_activated(spell_preview_widget);
         self.connect_spell_added();
         self.connect_spell_removed();
+        self.connect_export_dialog(export_button);
 
         return layout;
+    }
+
+    fn connect_export_dialog(&self, button: gtk4::Button) {
+        let selected_spells = self.selected_spells.clone();
+        button.connect_clicked(move |_| {
+            let filter = gtk4::FileFilter::new();
+            filter.add_suffix("pdf");
+            filter.add_mime_type("pdf");
+            let filters = gio::ListStore::new::<gtk4::FileFilter>();
+            filters.append(&filter);
+            let window: Option<&gtk4::ApplicationWindow> = None;
+            let cancelable: Option<&gio::Cancellable> = None;
+            let selected_spells_moved = selected_spells.clone();
+            gtk4::FileDialog::builder()
+                .title("Save as")
+                .filters(&filters)
+                .build()
+                .save(window, cancelable, move |file| {
+                    print!("File");
+                    if let Err(error) = Self::save_selected_spells(file, &selected_spells_moved) {
+                        println!("{error}");
+                    }
+                });
+        });
+    }
+
+    fn save_selected_spells(
+        file: Result<gio::File, glib::Error>,
+        spells: &SelectedSpellCollection,
+    ) -> anyhow::Result<()> {
+        let file = file?;
+        let path = file
+            .path()
+            .ok_or_else(|| anyhow::anyhow!("Cannot obtain path"))?;
+        let file = std::fs::File::create(&path)?;
+        let spells = spells.collect_spells();
+        write_to_pdf(file, spells.iter().map(|s| s.as_ref()))?;
+        Ok(())
     }
 
     fn connect_spell_activated(&self, widget: impl IsA<Widget>) {

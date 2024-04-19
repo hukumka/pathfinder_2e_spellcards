@@ -130,6 +130,9 @@ impl SpellCollection {
         let factory = SignalListItemFactory::new();
         let collection = self.clone();
         factory.connect_setup(move |_, list_item| {
+            let list_item = list_item
+                .downcast_ref::<gtk4::ListItem>()
+                .expect("Must be ListItem");
             let row_widget = collection.build_row_widget();
             list_item.set_child(Some(&row_widget));
 
@@ -154,6 +157,9 @@ impl SpellCollection {
             });
         });
         factory.connect_bind(move |_, list_item| {
+            let list_item = list_item
+                .downcast_ref::<gtk4::ListItem>()
+                .expect("Must be ListItem");
             let model = list_item
                 .item()
                 .and_downcast::<SpellModel>()
