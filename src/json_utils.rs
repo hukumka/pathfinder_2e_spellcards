@@ -51,7 +51,7 @@ impl ObjectExt for Object {
         let object = self
             .get(key)
             .ok_or_else(|| anyhow!("Field `{key}` missing"))?;
-        Ok(T::parse(object).map_err(|e| e.context(format!("Then parsing field `{key}`")))?)
+        T::parse(object).map_err(|e| e.context(format!("Then parsing field `{key}`")))
     }
 
     fn get_typed_maybe<T: TypedParse>(&self, key: &str) -> Result<Option<T>> {

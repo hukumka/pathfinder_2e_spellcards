@@ -57,7 +57,7 @@ impl SimpleSpellDB {
         let data = read_to_string(path)?;
         let spells = json::parse(&data)?
             .as_array()?
-            .into_iter()
+            .iter()
             .map(|obj| Spell::parse(obj.as_object()?))
             .collect::<anyhow::Result<Vec<_>>>()?;
         Ok(Self { spells })

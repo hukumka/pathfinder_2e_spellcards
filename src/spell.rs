@@ -98,12 +98,12 @@ impl Spell {
 
     fn parse_markdown(markdown: &str) -> Result<(String, Option<String>, Vec<String>)> {
         match markdown.split("---").collect::<Vec<_>>().as_slice() {
-            &[_, description, heightened, ref extras @ ..] => Ok((
+            [_, description, heightened, ref extras @ ..] => Ok((
                 description.trim().to_string(),
                 Some(heightened.trim().to_string()),
                 extras.iter().map(|s| s.to_string()).collect(),
             )),
-            &[_, description] => Ok((description.to_string(), None, vec![])),
+            [_, description] => Ok((description.to_string(), None, vec![])),
             _ => Err(anyhow!("Unable to extract description and heightened.")),
         }
     }
@@ -199,7 +199,7 @@ impl Actions {
     fn parse(source: String) -> Result<Self> {
         let result = Self::parse_range(&source)
             .or_else(|| Self::numeric_parse(&source))
-            .unwrap_or_else(|| Self::Other(source));
+            .unwrap_or(Self::Other(source));
         Ok(result)
     }
 

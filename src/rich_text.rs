@@ -5,7 +5,6 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::path::Path;
 
 const LINE_THICKNESS: f32 = 1.0;
 
@@ -67,10 +66,6 @@ impl FontProvider for () {
 impl<T> Font<T> {
     pub fn font_ref(&self) -> &T {
         &self.font_ref
-    }
-
-    pub fn face(&self) -> &Face {
-        &self.font
     }
 
     fn char_width(&self, c: char) -> Option<f32> {
@@ -168,7 +163,7 @@ impl<'a, T> SceneBuilder<'a, T> {
     }
 
     pub fn is_out_of_bounds(&self) -> bool {
-        return self.y_offset >= self.bounding_box.height();
+        self.y_offset >= self.bounding_box.height()
     }
 
     pub fn set_font(&mut self, font: &'a Font<T>) -> &mut Self {
@@ -281,14 +276,12 @@ impl<'a, T> SceneBuilder<'a, T> {
                     font_size,
                 }));
                 text = remaining;
+            } else if self.current_line.is_empty() {
+                let text = &text[0..Self::next_word(text, 0)];
+                let width = self.get_text_width(text);
+                panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
             } else {
-                if self.current_line.is_empty() {
-                    let text = &text[0..Self::next_word(text, 0)];
-                    let width = self.get_text_width(text);
-                    panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
-                } else {
-                    self.finish_line();
-                }
+                self.finish_line();
             }
         }
         self
@@ -302,14 +295,12 @@ impl<'a, T> SceneBuilder<'a, T> {
                 self.x_offset += chunk.rect.width() + self.chunk_space;
                 self.current_line.push(Block::Text(chunk));
                 text = remaining;
+            } else if self.current_line.is_empty() {
+                let text = &text[0..Self::next_word(text, 0)];
+                let width = self.get_text_width(text);
+                panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
             } else {
-                if self.current_line.is_empty() {
-                    let text = &text[0..Self::next_word(text, 0)];
-                    let width = self.get_text_width(text);
-                    panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
-                } else {
-                    self.finish_line();
-                }
+                self.finish_line();
             }
         }
         self

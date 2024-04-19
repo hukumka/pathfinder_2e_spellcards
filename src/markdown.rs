@@ -53,7 +53,7 @@ impl<'a, T> SceneBuilder<'a, T> {
         }
         for line in iter {
             self.finish_line();
-            for part in Parser::new(&line) {
+            for part in Parser::new(line) {
                 self.add_event(config, &mut md_state, &mut tag_stack, part);
             }
         }

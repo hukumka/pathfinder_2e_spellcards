@@ -189,12 +189,11 @@ impl SelectedSpellCollection {
             .factory(&factory)
             .model(&SingleSelection::new(Some(self.model.clone())))
             .build();
-        let scrolled_window_view = gtk4::ScrolledWindow::builder()
+        gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .vexpand(true)
             .child(&list_view)
-            .build();
-        scrolled_window_view
+            .build()
     }
 
     fn setup_factory(&self) -> SignalListItemFactory {

@@ -94,7 +94,7 @@ impl<T: FontProvider> OwnedFontConfig<T> {
         })
     }
 
-    pub fn config<'a>(&'a self) -> FontConfig<'a, T> {
+    pub fn config(&self) -> FontConfig<'_, T> {
         FontConfig {
             md_config: MdConfig {
                 text_font: &self.text,
@@ -140,7 +140,7 @@ fn draw_page(layer: &mut PdfLayerReference, page: &[[PageCell; GRID_HEIGHT]]) {
     for (x, row) in page.iter().enumerate() {
         for (y, scene) in row.iter().enumerate() {
             if let PageCell::Filled(scene) = scene {
-                render_scene(layer, (x, y), &scene);
+                render_scene(layer, (x, y), scene);
             }
         }
     }
@@ -207,7 +207,7 @@ pub fn build_spell_scene<'a, T>(
         Vector2F::zero(),
         Vector2F::new(mm_to_pt(CARD_WIDTH_INNER), mm_to_pt(CARD_HEIGHT_INNER)),
     );
-    let mut builder = SceneBuilder::<'a, T>::new(&config.md_config.text_font, rect);
+    let mut builder = SceneBuilder::<'a, T>::new(config.md_config.text_font, rect);
 
     builder
         .set_line_space(mm_to_pt(HEADER_LINE_SPACE))

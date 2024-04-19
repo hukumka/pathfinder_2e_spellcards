@@ -77,11 +77,13 @@ impl SpellRow {
     }
 }
 
+type SpellCallback = Box<dyn Fn(Rc<Spell>)>;
+
 #[derive(Clone)]
 pub struct SpellCollection {
     model: gio::ListStore,
-    spell_selected: Rc<RefCell<Box<dyn Fn(Rc<Spell>)>>>,
-    spell_added: Rc<RefCell<Box<dyn Fn(Rc<Spell>)>>>,
+    spell_selected: Rc<RefCell<SpellCallback>>,
+    spell_added: Rc<RefCell<SpellCallback>>,
 }
 
 impl SpellCollection {
@@ -119,11 +121,10 @@ impl SpellCollection {
             .factory(&factory)
             .model(&SingleSelection::new(Some(self.model.clone())))
             .build();
-        let scrolled_window_view = gtk4::ScrolledWindow::builder()
+        gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .child(&list_view)
-            .build();
-        scrolled_window_view
+            .build()
     }
 
     fn setup_factory(&self) -> SignalListItemFactory {

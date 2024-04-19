@@ -90,7 +90,7 @@ impl AppState {
         self.connect_spell_removed();
         self.connect_export_dialog(export_button);
 
-        return layout;
+        layout
     }
 
     fn connect_export_dialog(&self, button: gtk4::Button) {
@@ -125,7 +125,7 @@ impl AppState {
         let path = file
             .path()
             .ok_or_else(|| anyhow::anyhow!("Cannot obtain path"))?;
-        let file = std::fs::File::create(&path)?;
+        let file = std::fs::File::create(path)?;
         let spells = spells.collect_spells();
         write_to_pdf(file, spells.iter().map(|s| s.as_ref()))?;
         Ok(())
@@ -248,7 +248,7 @@ fn build_search(on_search: impl Fn(Query) + Clone + 'static) -> impl IsA<Widget>
     rank.delegate()
         .unwrap()
         .connect_insert_text(|rank, text, _| {
-            if text.contains(|c: char| !c.is_digit(10)) {
+            if text.contains(|c: char| !c.is_ascii_digit()) {
                 glib::signal::signal_stop_emission_by_name(rank, "insert-text");
             }
         });
