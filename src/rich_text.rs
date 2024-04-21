@@ -9,7 +9,7 @@ use std::fmt;
 const LINE_THICKNESS: f32 = 1.0;
 
 pub struct Font<T> {
-    font: Face,
+    font: Face<&'static [u8]>,
     font_ref: T,
     size_cache: RefCell<HashMap<char, Option<f32>>>,
     units_per_em: f32,
@@ -24,11 +24,11 @@ pub enum FontKind {
 }
 
 impl FontKind {
-    pub fn path(self) -> &'static str {
+    pub fn bytes(self) -> &'static [u8] {
         match self {
-            FontKind::Text | FontKind::Italic => "static/Helvetica.ttf",
-            FontKind::Bold => "static/Helvetica-Bold.ttf",
-            FontKind::ActionCount => "static/Pathfinder2eActions.ttf",
+            FontKind::Text | FontKind::Italic => include_bytes!("../static/Helvetica.ttf"),
+            FontKind::Bold => include_bytes!("../static/Helvetica-Bold.ttf"),
+            FontKind::ActionCount => include_bytes!("../static/Pathfinder2eActions.ttf"),
         }
     }
 }
@@ -43,8 +43,7 @@ impl<T: FontProvider> Font<T> {
     pub fn build(provider_source: &mut T::Init, font: FontKind) -> Result<Self> {
         let font_ref = T::build_font(provider_source, font)?;
 
-        let font_path = font.path();
-        let font = Library::init()?.new_face(font_path, 0)?;
+        let font = Library::init()?.new_memory_face2(font.bytes(), 0)?;
         let units_per_em = font.em_size() as f32;
         Ok(Font {
             font,

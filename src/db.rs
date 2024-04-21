@@ -2,7 +2,6 @@ use crate::json_utils::JsonValueExt;
 use crate::spell::{Spell, Traditions};
 use anyhow::Result;
 use std::rc::Rc;
-use std::{fs::read_to_string, path::Path};
 
 #[derive(Debug, Clone, Default)]
 pub struct Query {
@@ -53,9 +52,8 @@ pub struct SimpleSpellDB {
 }
 
 impl SimpleSpellDB {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
-        let data = read_to_string(path)?;
-        let spells = json::parse(&data)?
+    pub fn new(data: &'static str) -> Result<Self> {
+        let spells = json::parse(data)?
             .as_array()?
             .iter()
             .map(|obj| Spell::parse(obj.as_object()?))

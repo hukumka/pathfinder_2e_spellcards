@@ -25,7 +25,7 @@ pub fn run_gtk_app(db: SimpleSpellDB) -> glib::ExitCode {
 
 fn load_css() {
     let provider = gtk4::CssProvider::new();
-    provider.load_from_path("static/gtk.css");
+    provider.load_from_data(include_str!("../static/gtk.css"));
     gtk4::style_context_add_provider_for_display(
         &gdk::Display::default().expect("Could not connect to a display."),
         &provider,
@@ -341,7 +341,11 @@ impl FontProvider for CairoFont {
         provider_source: &mut Self::Init,
         font: crate::rich_text::FontKind,
     ) -> anyhow::Result<Self> {
-        let font = provider_source.new_face(font.path(), 0)?;
+        let bytes = font.bytes();
+        let mut data = Vec::with_capacity(bytes.len());
+        data.extend_from_slice(bytes);
+        let data = Rc::new(data);
+        let font = provider_source.new_memory_face(data, 0)?;
         Ok(CairoFont {
             font: cairo::FontFace::create_from_ft(&font)?,
         })

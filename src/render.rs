@@ -11,7 +11,6 @@ use printpdf::{
     Color, Mm, PdfDocument, PdfLayerReference, Point, Polygon, Pt, Rgb,
 };
 use printpdf::{BuiltinFont, IndirectFontRef, PdfDocumentReference};
-use std::fs::File;
 use std::io::{BufWriter, Write};
 
 // Everything is measured in Mm
@@ -59,7 +58,7 @@ impl FontProvider for IndirectFontRef {
     fn build_font(provider: &mut Self::Init, font: FontKind) -> Result<IndirectFontRef> {
         let font = match font {
             FontKind::ActionCount => {
-                return Ok(provider.add_external_font(File::open(font.path())?)?);
+                return Ok(provider.add_external_font(font.bytes())?);
             }
             FontKind::Text => BuiltinFont::Helvetica,
             FontKind::Bold => BuiltinFont::HelveticaBold,

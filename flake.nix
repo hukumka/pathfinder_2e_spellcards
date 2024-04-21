@@ -29,8 +29,12 @@
         inherit system overlays;
       };
       inherit (pkgs) lib;
-      shareFilter = path: _type: null != builtins.match "^share" (builtins.trace path path);
-      sourceFilter = path: type: (shareFilter path type) || (craneLib.filterCargoSources path type);
+      allowStaticFilter = path: _type: builtins.match ".*/static/.*$" path != null;
+      allowDataFilter = path: _type: builtins.match ".*/nethys_data/spells.json$" path != null;
+      sourceFilter = path: type: 
+        (allowStaticFilter path type)
+        || (allowDataFilter path type)
+        || (craneLib.filterCargoSources path type);
       # build time dependencies
       nativeBuildInputs = with pkgs; [
         rustToolchain
@@ -52,7 +56,7 @@
       rustToolchain = 
           (pkgs.rust-bin.stable.${rustVersion}.default.override { extensions = [ "rust-src" ]; });
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-      src = lib.cleanSourceWith { src = ./.; filter = sourceFilter; };
+      src = lib.cleanSourceWith { src = craneLib.path ./.; filter = sourceFilter; };
       commonArgs = {
         inherit src nativeBuildInputs buildInputs;
       };
