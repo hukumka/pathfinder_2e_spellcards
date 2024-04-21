@@ -10,6 +10,10 @@ Format is chosen automatically. Normal is default, but for spells that do not fi
 
 ![image](https://github.com/hukumka/pathfinder_2e_spellcards/assets/5196471/bea56a04-cf04-47f8-b3d1-44f80463f2aa)
 
+Now with GUI for spell selection!
+
+![20240421_23h35m46s_grim](https://github.com/hukumka/pathfinder_2e_spellcards/assets/5196471/aad7dbc7-d685-4831-974c-75fc0ef246bc)
+
 ## State:
 
 Capable of rendering most spells.
@@ -29,22 +33,7 @@ Spells that currently cannot be rendered due to being very long, and not fitting
 
 ## Usage:
 
-Write list of spells to render in following format, and save in `spells.txt`:
-```
-divine lance
-needle darts
-heal
-heal
-```
-
-Run command generating spellcards:
-
-```
-spellcard_generator
-```
-
-Output is stored in `output.pdf`
-
+Select spells you need by using search. Then export as pdf.
 
 ## Builing from source
 
