@@ -1,6 +1,8 @@
 use crate::markdown::MdConfig;
-use crate::rich_text::{AlignStrategy, Font, Scene, SceneBuilder, TextChunk};
-use crate::spell::Spell;
+use crate::rich_text::{
+    AlignStrategy, Font, FontKind, FontProvider, Scene, SceneBuilder, TextChunk,
+};
+use crate::spell::{Actions, Spell};
 use anyhow::{anyhow, Result};
 use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::Vector2F;
@@ -8,6 +10,7 @@ use printpdf::{
     path::{PaintMode, WindingOrder},
     Color, Mm, PdfDocument, PdfLayerReference, Point, Polygon, Pt, Rgb,
 };
+use printpdf::{BuiltinFont, IndirectFontRef, PdfDocumentReference};
 use std::io::{BufWriter, Write};
 
 // Everything is measured in Mm
@@ -37,47 +40,95 @@ const TRAIT_CHUNK_SPACE: f32 = 0.3;
 const GENERAL_TEXT_FONT_SIZE: f32 = 7.7;
 
 #[derive(Copy, Clone)]
-struct FontConfig<'a> {
-    md_config: MdConfig<'a>,
-    action_count_font: &'a Font,
+pub struct FontConfig<'a, T> {
+    md_config: MdConfig<'a, T>,
+    action_count_font: &'a Font<T>,
+}
+
+pub struct OwnedFontConfig<T> {
+    text: Font<T>,
+    bold: Font<T>,
+    italic: Font<T>,
+    action_count: Font<T>,
+}
+
+impl FontProvider for IndirectFontRef {
+    type Init = PdfDocumentReference;
+
+    fn build_font(provider: &mut Self::Init, font: FontKind) -> Result<IndirectFontRef> {
+        let font = match font {
+            FontKind::ActionCount => {
+                return Ok(provider.add_external_font(font.bytes())?);
+            }
+            FontKind::Text => BuiltinFont::Helvetica,
+            FontKind::Bold => BuiltinFont::HelveticaBold,
+            FontKind::Italic => BuiltinFont::HelveticaOblique,
+        };
+
+        let result = provider
+            .add_builtin_font(font)
+            .map_err(|e| anyhow::Error::from(e).context("Unable to load font ref"))?;
+        Ok(result)
+    }
+}
+
+impl<T: FontProvider> OwnedFontConfig<T> {
+    pub fn new(doc: &mut T::Init) -> Result<Self> {
+        let text = Font::<T>::build(doc, FontKind::Text)
+            .map_err(|e| e.context("Unable to load Helvetica"))?;
+
+        let bold = Font::<T>::build(doc, FontKind::Bold)
+            .map_err(|e| e.context("Unable to load Helvetica Bold"))?;
+
+        let italic = Font::<T>::build(doc, FontKind::Italic)
+            .map_err(|e| e.context("Unable to load Helvetica Italic"))?;
+
+        let action_count = Font::<T>::build(doc, FontKind::ActionCount)
+            .map_err(|e| e.context("Unable to load Pathfinder Icons font"))?;
+        Ok(Self {
+            text,
+            bold,
+            italic,
+            action_count,
+        })
+    }
+
+    pub fn config(&self) -> FontConfig<'_, T> {
+        FontConfig {
+            md_config: MdConfig {
+                text_font: &self.text,
+                bold_font: &self.bold,
+                italic_font: &self.italic,
+            },
+            action_count_font: &self.action_count,
+        }
+    }
 }
 
 /// Write document containing all spells into `output`
-pub fn write_to_pdf<T: Write>(output: T, spells: &[Spell]) -> Result<()> {
+pub fn write_to_pdf<'a, T: Write>(
+    output: T,
+    spells: impl IntoIterator<Item = &'a Spell>,
+) -> Result<()> {
     let (mut doc, page1, layer1) =
         PdfDocument::new("Spells", Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer1");
 
-    let text_font = Font::add_helvetica(&mut doc, printpdf::BuiltinFont::Helvetica)
-        .map_err(|e| e.context("Unable to load Helvetica"))?;
-
-    let font_bold = Font::add_helvetica(&mut doc, printpdf::BuiltinFont::HelveticaBold)
-        .map_err(|e| e.context("Unable to load Helvetica"))?;
-
-    let italic_font = Font::add_helvetica(&mut doc, printpdf::BuiltinFont::HelveticaOblique)
-        .map_err(|e| e.context("Unable to load Helvetica"))?;
-
-    let action_count_font = Font::add_external_font(&mut doc, &"static/Pathfinder2eActions.ttf")
-        .map_err(|e| e.context("Unable to load Pathfinder Icons font"))?;
-
-    let font_config = FontConfig {
-        md_config: MdConfig {
-            text_font: &text_font,
-            bold_font: &font_bold,
-            italic_font: &italic_font,
-        },
-        action_count_font: &action_count_font,
-    };
-
+    let owned_font_config = OwnedFontConfig::<IndirectFontRef>::new(&mut doc)?;
+    let font_config = owned_font_config.config();
     let mut layer = doc.get_page(page1).get_layer(layer1);
 
     init_page(&mut layer);
     let pages = build_pages(&font_config, spells);
-    draw_page(&mut layer, &pages[..GRID_WIDTH]);
-    for page in pages[GRID_WIDTH..].chunks(GRID_WIDTH) {
-        let (page_index, layer_index) = doc.add_page(Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer");
-        layer = doc.get_page(page_index).get_layer(layer_index);
-        init_page(&mut layer);
-        draw_page(&mut layer, page);
+    if pages.len() >= GRID_WIDTH {
+        draw_page(&mut layer, &pages[..GRID_WIDTH]);
+        for page in pages[GRID_WIDTH..].chunks(GRID_WIDTH) {
+            let (page_index, layer_index) = doc.add_page(Mm(A4_WIDTH), Mm(A4_HEIGHT), "Layer");
+            layer = doc.get_page(page_index).get_layer(layer_index);
+            init_page(&mut layer);
+            draw_page(&mut layer, page);
+        }
+    } else {
+        draw_page(&mut layer, &pages);
     }
 
     doc.save(&mut BufWriter::new(output))?;
@@ -88,20 +139,20 @@ fn draw_page(layer: &mut PdfLayerReference, page: &[[PageCell; GRID_HEIGHT]]) {
     for (x, row) in page.iter().enumerate() {
         for (y, scene) in row.iter().enumerate() {
             if let PageCell::Filled(scene) = scene {
-                render_scene(layer, (x, y), &scene);
+                render_scene(layer, (x, y), scene);
             }
         }
     }
 }
 
 pub enum PageCell<'a> {
-    Filled(Scene<'a>),
+    Filled(Scene<'a, IndirectFontRef>),
     Empty,
 }
 
-fn build_pages<'a>(
-    font_config: &'a FontConfig<'a>,
-    spells: &'a [Spell],
+fn build_pages<'a, 'b: 'a>(
+    font_config: &'a FontConfig<'a, IndirectFontRef>,
+    spells: impl IntoIterator<Item = &'b Spell>,
 ) -> Vec<[PageCell<'a>; GRID_HEIGHT]> {
     let mut doubles = vec![];
     let mut normal = vec![];
@@ -147,15 +198,15 @@ fn init_page(layer: &mut PdfLayerReference) {
 }
 
 /// Write spell
-fn build_spell_scene<'a>(
-    config: &'a FontConfig<'a>,
+pub fn build_spell_scene<'a, T>(
+    config: &'a FontConfig<'a, T>,
     spell: &'a Spell,
-) -> Result<(Scene<'a>, bool)> {
+) -> Result<(Scene<'a, T>, bool)> {
     let rect = RectF::new(
         Vector2F::zero(),
         Vector2F::new(mm_to_pt(CARD_WIDTH_INNER), mm_to_pt(CARD_HEIGHT_INNER)),
     );
-    let mut builder = SceneBuilder::<'a>::new(&config.md_config.text_font, rect);
+    let mut builder = SceneBuilder::<'a, T>::new(config.md_config.text_font, rect);
 
     builder
         .set_line_space(mm_to_pt(HEADER_LINE_SPACE))
@@ -164,7 +215,19 @@ fn build_spell_scene<'a>(
         .set_font_size(11.0) // Name
         .add_text(&spell.name);
 
-    if let Some(action) = spell.actions.as_str() {
+    if let Actions::Range(from, to) = &spell.actions {
+        builder
+            .set_font_size(14.0)
+            .set_font(config.action_count_font) // Action count;
+            .add_text(Actions::number_as_str(*from).unwrap_or(""))
+            .set_font(config.md_config.text_font)
+            .set_font_size(11.0)
+            .add_text("to")
+            .set_font(config.action_count_font) // Action count;
+            .set_font_size(14.0)
+            .add_text(Actions::number_as_str(*to).unwrap_or(""))
+            .set_font(config.md_config.text_font);
+    } else if let Some(action) = spell.actions.as_str() {
         builder
             .set_font_size(14.0)
             .set_font(config.action_count_font) // Action count;
@@ -223,7 +286,11 @@ fn build_spell_scene<'a>(
     }
 }
 
-fn render_scene(layer: &mut PdfLayerReference, (x, y): (usize, usize), scene: &Scene) {
+fn render_scene(
+    layer: &mut PdfLayerReference,
+    (x, y): (usize, usize),
+    scene: &Scene<'_, IndirectFontRef>,
+) {
     let offset = Point::new(
         Mm(X_PADDING_PAGE + (CARD_WIDTH + X_PADDING) * x as f32),
         Mm(Y_PADDING_PAGE + (CARD_HEIGHT + Y_PADDING) * (GRID_HEIGHT - 1 - y) as f32),
@@ -248,7 +315,11 @@ fn render_scene(layer: &mut PdfLayerReference, (x, y): (usize, usize), scene: &S
     });
 }
 
-fn draw_text(layer: &mut PdfLayerReference, offset: Point, text: &TextChunk) {
+fn draw_text(
+    layer: &mut PdfLayerReference,
+    offset: Point,
+    text: &TextChunk<'_, '_, IndirectFontRef>,
+) {
     let origin = text_coords_to_render(offset, text.rect.lower_left());
     layer.use_text(
         text.text.clone(),

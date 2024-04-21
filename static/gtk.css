@@ -1,0 +1,38 @@
+@define-color bg-dark #f0f0f0;
+@define-color bg-light #ffffff;
+@define-color element-inactive #cad5e2ff;
+@define-color element-active #abd1ff;
+@define-color neutral-text #09111a;
+@define-color element-text #0b0b0b;
+
+window {
+  background: @bg-light;
+  color: @neutral-text;
+}
+
+box.search_sidebar {
+  background: @bg-dark;
+  padding: 5px;
+}
+
+listview {
+  background: inherit;
+}
+
+listview.spells > row {
+  background: @element-inactive;
+  color: @element-text;
+  border: solid 2px @element-inactive;
+  border-radius: 5px;
+  margin: 5px;
+  padding: 2px;
+}
+
+listview.spells>row:selected {
+  background: @element-active;
+}
+
+listview.spells>row:hover {
+  border-color: @element-active;
+}
+

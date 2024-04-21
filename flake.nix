@@ -2,50 +2,86 @@
   description = "Pathfinder 2e SpellCard generator";
 
   inputs = {
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-utils.follows = "flake-utils";
+      };
+    };
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-parts, ...}: 
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = nixpkgs.lib.systems.flakeExposed;
-      perSystem = {self', pkgs, system, ...}:
-        let
-          rustVersion = "1.70.0";
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [inputs.cargo2nix.overlays.default (import inputs.rust-overlay)];
-          };
-          rustPkgs = pkgs.rustBuilder.makePackageSet {
-            inherit rustVersion;
-            packageFun = import ./Cargo.nix;
+  outputs = {
+    self, nixpkgs, flake-utils, rust-overlay, crane
+  }: flake-utils.lib.eachDefaultSystem (system: 
+    let
+      rustVersion = "1.77.2";
+      overlays = [ (import rust-overlay) ];
+      pkgs = import nixpkgs {
+        inherit system overlays;
+      };
+      inherit (pkgs) lib;
+      allowStaticFilter = path: _type: builtins.match ".*/static/.*$" path != null;
+      allowDataFilter = path: _type: builtins.match ".*/nethys_data/spells.json$" path != null;
+      sourceFilter = path: type: 
+        (allowStaticFilter path type)
+        || (allowDataFilter path type)
+        || (craneLib.filterCargoSources path type);
+      # build time dependencies
+      nativeBuildInputs = with pkgs; [
+        rustToolchain
+        pkg-config
+        patchelf
+        makeWrapper
+      ];
+      # run time dependencies 
+      buildInputs = with pkgs; [
+        fontconfig.dev
+        glib
+        gtk4
+      ];
+      # shell dependencies
+      devBuildInputs = with pkgs; [
+        rust-analyzer-unwrapped
+      ];
 
-            packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
-              (pkgs.rustBuilder.rustLib.makeOverride {
-                name = "yeslogic-fontconfig-sys";
-                overrideAttrs = drv: {
-                  propagatedNativeBuildInputs = drv.propagatedNativeBuildInputs or [ ] ++ [
-                    pkgs.fontconfig.dev
-                  ];
-                };
-              })
-            ];
-          };
-        in {
-          packages = rec {
-            spellcard_generator = (rustPkgs.workspace.spellcard_generator {}).bin;
-            default = spellcard_generator;
-          };
-          devShells.default = pkgs.mkShell {
-            buildInputs = with pkgs; [
-              pkg-config
-              fontconfig.dev
-              rust-analyzer-unwrapped
-              (rust-bin.stable.${rustVersion}.default.override { extensions = [ "rust-src" ]; })
-            ];
-          };
-        };
-    };
+      rustToolchain = 
+          (pkgs.rust-bin.stable.${rustVersion}.default.override { extensions = [ "rust-src" ]; });
+      craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+      src = lib.cleanSourceWith { src = craneLib.path ./.; filter = sourceFilter; };
+      commonArgs = {
+        inherit src nativeBuildInputs buildInputs;
+      };
+      # GTK requires prebuilt GSettings. XDG_DATA_DIRS is used to provide it with builtin settings.
+      gsettings_xdg_dir = "${pkgs.gtk4}/share/gsettings-schemas/gtk4-${pkgs.gtk4.version}";
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+      bin = craneLib.buildPackage (commonArgs // {
+        inherit cargoArtifacts;
+        postFixup = ''
+          wrapProgram $out/bin/spellcard_generator --prefix XDG_DATA_DIRS : ${gsettings_xdg_dir}/
+        '';
+      });
+
+    in with pkgs; {
+      packages = {
+        inherit bin;
+        default = bin;
+      };
+      devShells.default = mkShell {
+        inputsFrom = [bin];
+        buildInputs = devBuildInputs;
+        shellHook = ''
+          export XDG_DATA_DIRS="${gsettings_xdg_dir}:$XDG_DATA_DIRS"
+        '';
+      };
+      
+    });
 }

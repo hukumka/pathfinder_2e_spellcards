@@ -1,9 +1,11 @@
 use crate::json_utils::ObjectExt;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use json::object::Object;
+use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
 pub struct Spell {
+    pub id: usize,
     pub name: String,
     pub level: u8,
     pub spell_type: SpellType,
@@ -11,8 +13,18 @@ pub struct Spell {
     pub actions: Actions,
     pub properties: Vec<Property>,
     pub description: String,
+    pub summary: String,
     pub heightened: Option<String>,
     pub extras: Vec<String>,
+    pub traditions: Traditions,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Traditions {
+    pub is_arcane: bool,
+    pub is_primal: bool,
+    pub is_divine: bool,
+    pub is_occult: bool,
 }
 
 /// Various properties like area, target or distance
@@ -32,7 +44,9 @@ pub enum SpellType {
 #[derive(Debug, Clone)]
 pub enum Actions {
     Number(u8),
+    Range(u8, u8),
     Reaction,
+    FreeAction,
     Other(String),
 }
 
@@ -52,8 +66,14 @@ impl Spell {
             .map_err(|err| err.context("Unable to parse Spell."))?;
         let (description, heightened, extras) =
             Self::parse_markdown(&object.get_typed::<String>("markdown")?)?;
+        let traditions = Traditions::parse(
+            object
+                .get_typed_maybe::<Vec<String>>("tradition")?
+                .unwrap_or(vec![]),
+        );
 
         Ok(Spell {
+            id: Self::parse_id(object)?,
             name,
             level: object.get_typed("level")?,
             spell_type: SpellType::parse(&object.get_typed::<String>("category")?)?,
@@ -61,19 +81,29 @@ impl Spell {
             actions: Actions::parse(object.get_typed::<String>("actions")?)?,
             properties: Self::parse_properties(object)?,
             description,
+            summary: object.get_typed::<String>("summary")?,
             heightened,
             extras,
+            traditions,
         })
+    }
+
+    fn parse_id(object: &Object) -> Result<usize> {
+        let id = object.get_typed::<String>("id")?;
+        if !id.starts_with("spell-") {
+            bail!("Invalid Id format!");
+        }
+        Ok(id[6..].parse()?)
     }
 
     fn parse_markdown(markdown: &str) -> Result<(String, Option<String>, Vec<String>)> {
         match markdown.split("---").collect::<Vec<_>>().as_slice() {
-            &[_, description, heightened, ref extras @ ..] => Ok((
+            [_, description, heightened, ref extras @ ..] => Ok((
                 description.trim().to_string(),
                 Some(heightened.trim().to_string()),
                 extras.iter().map(|s| s.to_string()).collect(),
             )),
-            &[_, description] => Ok((description.to_string(), None, vec![])),
+            [_, description] => Ok((description.to_string(), None, vec![])),
             _ => Err(anyhow!("Unable to extract description and heightened.")),
         }
     }
@@ -125,6 +155,35 @@ impl Spell {
     }
 }
 
+impl Traditions {
+    fn parse(traditions: Vec<String>) -> Self {
+        let mut result = Self {
+            is_arcane: false,
+            is_primal: false,
+            is_divine: false,
+            is_occult: false,
+        };
+        for tradition in &traditions {
+            match tradition.as_str() {
+                "Arcane" => {
+                    result.is_arcane = true;
+                }
+                "Primal" => {
+                    result.is_primal = true;
+                }
+                "Occult" => {
+                    result.is_occult = true;
+                }
+                "Divine" => {
+                    result.is_divine = true;
+                }
+                _ => {}
+            }
+        }
+        result
+    }
+}
+
 impl SpellType {
     fn parse(name: &str) -> Result<Self> {
         match name {
@@ -138,21 +197,54 @@ impl SpellType {
 
 impl Actions {
     fn parse(source: String) -> Result<Self> {
-        match source.as_str() {
-            "Reaction" => Ok(Self::Reaction),
-            "Singe Action" => Ok(Self::Number(1)),
-            "Two Actions" => Ok(Self::Number(2)),
-            "Three Actions" => Ok(Self::Number(3)),
-            _ => Ok(Self::Other(source)),
+        let result = Self::parse_range(&source)
+            .or_else(|| Self::numeric_parse(&source))
+            .unwrap_or(Self::Other(source));
+        Ok(result)
+    }
+
+    fn numeric_parse(source: &str) -> Option<Self> {
+        match source {
+            "Reaction" => Some(Self::Reaction),
+            "Single Action" => Some(Self::Number(1)),
+            "Two Actions" => Some(Self::Number(2)),
+            "Three Actions" => Some(Self::Number(3)),
+            "Free Action" => Some(Self::FreeAction),
+            _ => None,
         }
     }
 
-    pub fn as_str(&self) -> Option<&'static str> {
+    fn parse_range(source: &str) -> Option<Self> {
+        let mut parts: Vec<_> = source.split("to").collect();
+        if parts.len() != 2 {
+            parts = source.split("or").collect();
+        }
+        if parts.len() != 2 {
+            return None;
+        }
+        let left = Self::numeric_parse(parts[0].trim())?;
+        let right = Self::numeric_parse(parts[1].trim())?;
+        if let (Self::Number(from), Self::Number(to)) = (left, right) {
+            Some(Self::Range(from, to))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_str(&self) -> Option<Cow<'static, str>> {
         match self {
-            Actions::Reaction => Some("5"),
-            Actions::Number(3) => Some("3"),
-            Actions::Number(2) => Some("2"),
-            Actions::Number(1) => Some("1"),
+            Actions::Reaction => Some(Cow::Borrowed("5")),
+            Actions::FreeAction => Some(Cow::Borrowed("4")),
+            Actions::Number(x) => Self::number_as_str(*x).map(Cow::Borrowed),
+            _ => None,
+        }
+    }
+
+    pub fn number_as_str(num: u8) -> Option<&'static str> {
+        match num {
+            1 => Some("1"),
+            2 => Some("2"),
+            3 => Some("3"),
             _ => None,
         }
     }

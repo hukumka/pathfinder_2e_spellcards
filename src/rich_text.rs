@@ -1,40 +1,50 @@
-use anyhow::{bail, Result};
-use font_kit::font;
-use font_kit::handle::Handle;
+use anyhow::Result;
+use freetype::{Face, Library};
 use pathfinder_geometry::{rect::RectF, vector::Vector2F};
-use printpdf::{BuiltinFont, IndirectFontRef, PdfDocumentReference};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::File;
-use std::path::Path;
 
 const LINE_THICKNESS: f32 = 1.0;
 
-pub struct Font {
-    font: font::Font,
-    font_ref: IndirectFontRef,
+pub struct Font<T> {
+    font: Face<&'static [u8]>,
+    font_ref: T,
     size_cache: RefCell<HashMap<char, Option<f32>>>,
     units_per_em: f32,
 }
 
-impl Font {
-    /// Add Helvetica font to document, and construct reference to it.
-    pub fn add_helvetica(doc: &mut PdfDocumentReference, font: BuiltinFont) -> Result<Self> {
-        let font_path = match font {
-            BuiltinFont::Helvetica => "static/Helvetica.ttf",
-            BuiltinFont::HelveticaBold => "static/Helvetica-Bold.ttf",
-            BuiltinFont::HelveticaOblique => "static/Helvetica.ttf",
-            _ => bail!("Unable to load font ref"),
-        };
+#[derive(Copy, Clone)]
+pub enum FontKind {
+    Text,
+    Bold,
+    Italic,
+    ActionCount,
+}
 
-        let font_ref = doc
-            .add_builtin_font(font)
-            .map_err(|e| anyhow::Error::from(e).context("Unable to load font ref"))?;
+impl FontKind {
+    pub fn bytes(self) -> &'static [u8] {
+        match self {
+            FontKind::Text | FontKind::Italic => include_bytes!("../static/Helvetica.ttf"),
+            FontKind::Bold => include_bytes!("../static/Helvetica-Bold.ttf"),
+            FontKind::ActionCount => include_bytes!("../static/Pathfinder2eActions.ttf"),
+        }
+    }
+}
 
-        let font = Handle::from_path(AsRef::<Path>::as_ref(font_path).into(), 0).load()?;
-        let units_per_em = font.metrics().units_per_em as f32;
+pub trait FontProvider: Sized {
+    type Init;
+
+    fn build_font(provider_source: &mut Self::Init, font: FontKind) -> Result<Self>;
+}
+
+impl<T: FontProvider> Font<T> {
+    pub fn build(provider_source: &mut T::Init, font: FontKind) -> Result<Self> {
+        let font_ref = T::build_font(provider_source, font)?;
+
+        let font = Library::init()?.new_memory_face2(font.bytes(), 0)?;
+        let units_per_em = font.em_size() as f32;
         Ok(Font {
             font,
             font_ref,
@@ -42,24 +52,18 @@ impl Font {
             units_per_em,
         })
     }
+}
 
-    /// Add External font to document, and construct reference to it.
-    pub fn add_external_font(
-        doc: &mut PdfDocumentReference,
-        path: &impl AsRef<Path>,
-    ) -> Result<Self> {
-        let font_ref = doc.add_external_font(File::open(path)?)?;
-        let font = Handle::from_path(path.as_ref().into(), 0).load()?;
-        let units_per_em = font.metrics().units_per_em as f32;
-        Ok(Font {
-            font,
-            font_ref,
-            size_cache: RefCell::new(HashMap::new()),
-            units_per_em,
-        })
+impl FontProvider for () {
+    type Init = ();
+
+    fn build_font(_: &mut Self::Init, _: FontKind) -> Result<Self> {
+        Ok(())
     }
+}
 
-    pub fn font_ref(&self) -> &IndirectFontRef {
+impl<T> Font<T> {
+    pub fn font_ref(&self) -> &T {
         &self.font_ref
     }
 
@@ -68,10 +72,13 @@ impl Font {
         if let Some(result) = map.get(&c) {
             return *result;
         }
-        let glyph = self.font.glyph_for_char(c)?;
-        let result = self.font.advance(glyph).ok().map(|offset| offset.x());
-        map.insert(c, result);
-        result
+        let _ = self
+            .font
+            .load_char(c as usize, freetype::face::LoadFlag::RENDER);
+        let width = self.font.glyph().advance().x as f32;
+
+        map.insert(c, Some(width));
+        Some(width)
     }
 
     fn scale(&self, size: f32) -> f32 {
@@ -85,25 +92,25 @@ pub struct Polygon {
 }
 
 /// Scene to display
-pub struct Scene<'a> {
+pub struct Scene<'a, T> {
     pub polygons: Vec<Polygon>,
-    pub parts: Vec<TextChunk<'a, 'a>>,
+    pub parts: Vec<TextChunk<'a, 'a, T>>,
 }
 
 /// Builder for rich text rendering.
 ///
 /// Coordinates are measured in `Pt`.
 /// Coordinates are
-pub struct SceneBuilder<'a> {
+pub struct SceneBuilder<'a, T> {
     /// Prepared content.
-    chunks: Vec<TextChunk<'a, 'a>>,
+    chunks: Vec<TextChunk<'a, 'a, T>>,
     polygons: Vec<Polygon>,
     /// Content which is still being laid out. Positions will change
     /// once line will be finilized.
-    current_line: Vec<Block<'a>>,
+    current_line: Vec<Block<'a, T>>,
     /// Bounding box inside which we try to fit content.
     bounding_box: RectF,
-    current_font: &'a Font,
+    current_font: &'a Font<T>,
 
     /// x position in current line for left line of bounding box.
     x_offset: f32,
@@ -117,8 +124,8 @@ pub struct SceneBuilder<'a> {
     chunk_space: f32,
 }
 
-impl<'a> SceneBuilder<'a> {
-    pub fn new(default_font: &'a Font, bounding_box: RectF) -> Self {
+impl<'a, T> SceneBuilder<'a, T> {
+    pub fn new(default_font: &'a Font<T>, bounding_box: RectF) -> Self {
         let mut result = Self {
             chunks: vec![],
             polygons: vec![],
@@ -136,7 +143,7 @@ impl<'a> SceneBuilder<'a> {
         result
     }
 
-    pub fn scene(self) -> Scene<'a> {
+    pub fn scene(self) -> Scene<'a, T> {
         Scene {
             polygons: self.polygons,
             parts: self.chunks,
@@ -155,10 +162,10 @@ impl<'a> SceneBuilder<'a> {
     }
 
     pub fn is_out_of_bounds(&self) -> bool {
-        return self.y_offset >= self.bounding_box.height();
+        self.y_offset >= self.bounding_box.height()
     }
 
-    pub fn set_font(&mut self, font: &'a Font) -> &mut Self {
+    pub fn set_font(&mut self, font: &'a Font<T>) -> &mut Self {
         self.current_font = font;
         self
     }
@@ -168,7 +175,7 @@ impl<'a> SceneBuilder<'a> {
         self
     }
 
-    pub fn get_font(&mut self) -> &'a Font {
+    pub fn get_font(&mut self) -> &'a Font<T> {
         self.current_font
     }
 
@@ -268,14 +275,12 @@ impl<'a> SceneBuilder<'a> {
                     font_size,
                 }));
                 text = remaining;
+            } else if self.current_line.is_empty() {
+                let text = &text[0..Self::next_word(text, 0)];
+                let width = self.get_text_width(text);
+                panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
             } else {
-                if self.current_line.is_empty() {
-                    let text = &text[0..Self::next_word(text, 0)];
-                    let width = self.get_text_width(text);
-                    panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
-                } else {
-                    self.finish_line();
-                }
+                self.finish_line();
             }
         }
         self
@@ -289,14 +294,12 @@ impl<'a> SceneBuilder<'a> {
                 self.x_offset += chunk.rect.width() + self.chunk_space;
                 self.current_line.push(Block::Text(chunk));
                 text = remaining;
+            } else if self.current_line.is_empty() {
+                let text = &text[0..Self::next_word(text, 0)];
+                let width = self.get_text_width(text);
+                panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
             } else {
-                if self.current_line.is_empty() {
-                    let text = &text[0..Self::next_word(text, 0)];
-                    let width = self.get_text_width(text);
-                    panic!("Cannot fit `{text}`. Text required {width}Pt, but only {max_width}Pt available.", max_width=self.bounding_box.width());
-                } else {
-                    self.finish_line();
-                }
+                self.finish_line();
             }
         }
         self
@@ -316,7 +319,7 @@ impl<'a> SceneBuilder<'a> {
         self.current_font.char_width(c).unwrap_or(0.0) * self.current_font.scale(self.font_size)
     }
 
-    fn split_chunk<'b>(&self, text: &'b str) -> (Option<TextChunk<'a, 'b>>, &'b str) {
+    fn split_chunk<'b>(&self, text: &'b str) -> (Option<TextChunk<'a, 'b, T>>, &'b str) {
         let text = text.trim();
         let mut offset = 0;
         let mut last_part = None;
@@ -338,7 +341,7 @@ impl<'a> SceneBuilder<'a> {
         text.chars().map(|c| self.get_char_width(c)).sum::<f32>()
     }
 
-    fn try_fit_chunk<'b>(&self, text: &'b str) -> Option<TextChunk<'a, 'b>> {
+    fn try_fit_chunk<'b>(&self, text: &'b str) -> Option<TextChunk<'a, 'b, T>> {
         let width = self.get_text_width(text);
         if self.x_offset + width > self.bounding_box.size().x() {
             return None;
@@ -394,7 +397,7 @@ impl<'a> SceneBuilder<'a> {
         self
     }
 
-    fn add_block(&mut self, block: Block<'a>) {
+    fn add_block(&mut self, block: Block<'a, T>) {
         match block {
             Block::Text(chunk) => self.chunks.push(chunk),
             Block::PaddedText {
@@ -410,7 +413,7 @@ impl<'a> SceneBuilder<'a> {
         }
     }
 
-    fn align_line_y(&self, line: &mut [Block<'a>]) -> f32 {
+    fn align_line_y(&self, line: &mut [Block<'a, T>]) -> f32 {
         let max_height = line
             .iter()
             .map(|chunk| chunk.height())
@@ -425,7 +428,7 @@ impl<'a> SceneBuilder<'a> {
         max_height
     }
 
-    fn align_line_right(&self, line: &mut [Block<'a>]) {
+    fn align_line_right(&self, line: &mut [Block<'a, T>]) {
         let mut x = self.bounding_box.width();
         for chunk in line.iter_mut().rev() {
             x -= chunk.width();
@@ -434,7 +437,7 @@ impl<'a> SceneBuilder<'a> {
         }
     }
 
-    fn justify_line_even(&self, line: &mut [Block<'a>]) {
+    fn justify_line_even(&self, line: &mut [Block<'a, T>]) {
         if line.len() < 2 {
             return;
         }
@@ -451,24 +454,24 @@ impl<'a> SceneBuilder<'a> {
 
 /// Part of rich text, positioned
 /// within layout, and ready for rendering.
-pub struct TextChunk<'a, 'b> {
+pub struct TextChunk<'a, 'b, T> {
     pub text: Cow<'b, str>,
     pub rect: RectF,
-    pub font: &'a Font,
+    pub font: &'a Font<T>,
     pub font_size: f32,
 }
 
 #[derive(Debug)]
-pub enum Block<'a> {
-    Text(TextChunk<'a, 'a>),
+pub enum Block<'a, T> {
+    Text(TextChunk<'a, 'a, T>),
     PaddedText {
-        chunk: TextChunk<'a, 'a>,
+        chunk: TextChunk<'a, 'a, T>,
         padding: f32,
         border: bool,
     },
 }
 
-impl<'a> Block<'a> {
+impl<'a, T> Block<'a, T> {
     fn height(&self) -> f32 {
         match self {
             Self::Text(chunk) => chunk.rect.height(),
@@ -508,7 +511,7 @@ impl<'a> Block<'a> {
     }
 }
 
-impl<'a, 'b> fmt::Debug for TextChunk<'a, 'b> {
+impl<'a, 'b, T> fmt::Debug for TextChunk<'a, 'b, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

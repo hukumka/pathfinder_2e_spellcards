@@ -2,10 +2,10 @@ use crate::rich_text::{Font, SceneBuilder};
 use pulldown_cmark::{Event, Parser, Tag};
 
 #[derive(Copy, Clone)]
-pub struct MdConfig<'a> {
-    pub text_font: &'a Font,
-    pub bold_font: &'a Font,
-    pub italic_font: &'a Font,
+pub struct MdConfig<'a, T> {
+    pub text_font: &'a Font<T>,
+    pub bold_font: &'a Font<T>,
+    pub italic_font: &'a Font<T>,
 }
 
 #[derive(Default)]
@@ -31,7 +31,7 @@ impl MdState {
         }
     }
 
-    fn get_font<'a>(&self, config: &MdConfig<'a>) -> &'a Font {
+    fn get_font<'a, T>(&self, config: &MdConfig<'a, T>) -> &'a Font<T> {
         if self.is_bold {
             config.bold_font
         } else if self.is_italic {
@@ -42,18 +42,18 @@ impl MdState {
     }
 }
 
-impl<'a> SceneBuilder<'a> {
-    pub fn add_markdown(&mut self, config: &MdConfig<'a>, markdown: &'a str) -> &mut Self {
+impl<'a, T> SceneBuilder<'a, T> {
+    pub fn add_markdown(&mut self, config: &MdConfig<'a, T>, markdown: &'a str) -> &mut Self {
         let mut md_state = MdState::default();
         let mut tag_stack = vec![];
 
-        let mut iter = markdown.split("\n\n");
+        let mut iter = markdown.split("\n\n").flat_map(|s| s.split("<br />"));
         for part in Parser::new(iter.next().unwrap()) {
             self.add_event(config, &mut md_state, &mut tag_stack, part);
         }
         for line in iter {
             self.finish_line();
-            for part in Parser::new(&line) {
+            for part in Parser::new(line) {
                 self.add_event(config, &mut md_state, &mut tag_stack, part);
             }
         }
@@ -62,7 +62,7 @@ impl<'a> SceneBuilder<'a> {
 
     fn add_event(
         &mut self,
-        config: &MdConfig<'a>,
+        config: &MdConfig<'a, T>,
         md_state: &mut MdState,
         tag_stack: &mut Vec<Tag<'a>>,
         event: Event<'a>,
