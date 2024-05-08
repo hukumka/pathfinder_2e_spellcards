@@ -319,7 +319,7 @@ impl<'a, T> SceneBuilder<'a, T> {
         self.current_font.char_width(c).unwrap_or(0.0) * self.current_font.scale(self.font_size)
     }
 
-    fn split_chunk<'b>(&self, text: &'b str) -> (Option<TextChunk<'a, 'b, T>>, &'b str) {
+    fn split_chunk<'b>(&mut self, text: &'b str) -> (Option<TextChunk<'a, 'b, T>>, &'b str) {
         let text = text.trim();
         let mut offset = 0;
         let mut last_part = None;
