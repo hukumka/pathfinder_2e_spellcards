@@ -103,12 +103,19 @@ fn traverse_html(html: &[u8], event_listener: &mut impl FnMut(MixedEvent)) {
             XmlEvent::Characters(characters) => {
                 traverse_markdown(characters, event_listener);
             }
-            XmlEvent::StartElement { name, .. } => {
-                if name.local_name == "li" {
+            XmlEvent::StartElement { name, .. } => match name.local_name.as_str() {
+                "li" => {
                     event_listener(MixedEvent::LineEnd);
                     event_listener(MixedEvent::Text("•".to_string()));
                 }
-            }
+                "tr" => {
+                    event_listener(MixedEvent::LineEnd);
+                }
+                "td" => {
+                    event_listener(MixedEvent::Text("|".to_string()));
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
