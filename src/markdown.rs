@@ -1,4 +1,4 @@
-use crate::rich_text::{Font, SceneBuilder};
+gse crate::rich_text::{Font, SceneBuilder};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use xml::reader::{EventReader, XmlEvent};
 
@@ -32,7 +32,6 @@ impl<'a, T> SceneBuilder<'a, T> {
     ) {
         match event {
             MixedEvent::LineEnd => {
-                println!("Explicit finish line");
                 self.finish_line();
             }
             MixedEvent::Text(text) => {
