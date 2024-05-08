@@ -14,4 +14,4 @@ pathfinder_geometry = "0.5"
 pulldown-cmark = "0.10"
 gtk4 = {version="0.8.1", features=["v4_10"]}
 cairo-rs = {version="0.19", features = ["freetype"]}
-
+xml-rs = "0.8"

@@ -78,6 +78,8 @@ impl AppState {
             let result = app_state.db.search(&query);
             app_state.search_results.set_spells(&result);
         }));
+        self.search_results
+            .set_spells(&self.db.search(&Query::default()));
         left_sidebar.append(&selected_spells);
         let export_button = gtk4::Button::builder().label("Export").build();
         left_sidebar.append(&export_button);
@@ -181,6 +183,7 @@ impl AppState {
 fn build_ui(db: Rc<SimpleSpellDB>, app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
+        .default_height(600)
         .title("Spell Card generator")
         .build();
     let (_, main_widget) = AppState::new(db, &window);

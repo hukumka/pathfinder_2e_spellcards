@@ -853,6 +853,7 @@ dependencies = [
  "pathfinder_geometry",
  "printpdf",
  "pulldown-cmark",
+ "xml-rs",
 ]
 
 [[package]]
@@ -1181,3 +1182,9 @@ checksum = "f0c976aaaa0e1f90dbb21e9587cdaf1d9679a1cde8875c0d6bd83ab96a208352"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "xml-rs"
+version = "0.8.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "791978798f0597cfc70478424c2b4fdc2b7a8024aaff78497ef00f24ef674193"
