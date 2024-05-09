@@ -124,22 +124,24 @@ impl AppState {
                 .filters(&filters)
                 .build()
                 .save(Some(&window), cancelable, move |file| {
-                    if let Err(error) = Self::save_selected_spells(file, &selected_spells_moved) {
-                        gtk4::AlertDialog::builder()
-                            .detail(error.to_string())
-                            .message("Error then exporting")
-                            .build()
-                            .show(Some(&window_moved));
+                    if let Ok(file) = file {
+                        if let Err(error) = Self::save_selected_spells(file, &selected_spells_moved)
+                        {
+                            gtk4::AlertDialog::builder()
+                                .detail(error.to_string())
+                                .message("Error then exporting")
+                                .build()
+                                .show(Some(&window_moved));
+                        }
                     }
                 });
         });
     }
 
     fn save_selected_spells(
-        file: Result<gio::File, glib::Error>,
+        file: gio::File,
         spells: &SelectedSpellCollection,
     ) -> anyhow::Result<()> {
-        let file = file?;
         let path = file
             .path()
             .ok_or_else(|| anyhow::anyhow!("Cannot obtain path"))?;
