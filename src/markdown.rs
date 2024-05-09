@@ -1,4 +1,4 @@
-gse crate::rich_text::{Font, SceneBuilder};
+use crate::rich_text::{Font, SceneBuilder};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use xml::reader::{EventReader, XmlEvent};
 
