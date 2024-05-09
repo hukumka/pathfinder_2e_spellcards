@@ -100,6 +100,7 @@ impl SelectedSpellRow {
         count.set_width_request(40);
         let result: Self = glib::Object::builder().build();
         result.set_orientation(gtk4::Orientation::Horizontal);
+        result.set_spacing(5);
         result.append(&label);
         result.append(&remove_button);
         result.append(&count);

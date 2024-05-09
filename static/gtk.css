@@ -36,3 +36,7 @@ listview.spells>row:hover {
   border-color: @element-active;
 }
 
+button.export_button {
+  margin: 5px;
+  padding: 10px;
+}

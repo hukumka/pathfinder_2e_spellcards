@@ -80,14 +80,24 @@ impl AppState {
         }));
         self.search_results
             .set_spells(&self.db.search(&Query::default()));
-        left_sidebar.append(&selected_spells);
-        let export_button = gtk4::Button::builder().label("Export").build();
-        left_sidebar.append(&export_button);
+        left_sidebar.append(&search_results);
 
         let spell_preview_widget = self.build_search_preview_widget();
+
+        let right_sidebar = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .css_classes(["search_sidebar"])
+            .build();
+        let export_button = gtk4::Button::builder()
+            .label("Export")
+            .css_classes(["export_button"])
+            .build();
+        right_sidebar.append(&selected_spells);
+        right_sidebar.append(&export_button);
+
         layout.append(&left_sidebar);
-        layout.append(&search_results);
         layout.append(&spell_preview_widget);
+        layout.append(&right_sidebar);
 
         self.connect_spell_activated(spell_preview_widget);
         self.connect_spell_added();
@@ -114,22 +124,24 @@ impl AppState {
                 .filters(&filters)
                 .build()
                 .save(Some(&window), cancelable, move |file| {
-                    if let Err(error) = Self::save_selected_spells(file, &selected_spells_moved) {
-                        gtk4::AlertDialog::builder()
-                            .detail(error.to_string())
-                            .message("Error then exporting")
-                            .build()
-                            .show(Some(&window_moved));
+                    if let Ok(file) = file {
+                        if let Err(error) = Self::save_selected_spells(file, &selected_spells_moved)
+                        {
+                            gtk4::AlertDialog::builder()
+                                .detail(error.to_string())
+                                .message("Error then exporting")
+                                .build()
+                                .show(Some(&window_moved));
+                        }
                     }
                 });
         });
     }
 
     fn save_selected_spells(
-        file: Result<gio::File, glib::Error>,
+        file: gio::File,
         spells: &SelectedSpellCollection,
     ) -> anyhow::Result<()> {
-        let file = file?;
         let path = file
             .path()
             .ok_or_else(|| anyhow::anyhow!("Cannot obtain path"))?;
