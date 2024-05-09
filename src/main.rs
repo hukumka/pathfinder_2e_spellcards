@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod db;
 mod gtk;
 mod json_utils;
