@@ -80,14 +80,24 @@ impl AppState {
         }));
         self.search_results
             .set_spells(&self.db.search(&Query::default()));
-        left_sidebar.append(&selected_spells);
-        let export_button = gtk4::Button::builder().label("Export").build();
-        left_sidebar.append(&export_button);
+        left_sidebar.append(&search_results);
 
         let spell_preview_widget = self.build_search_preview_widget();
+
+        let right_sidebar = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .css_classes(["search_sidebar"])
+            .build();
+        let export_button = gtk4::Button::builder()
+            .label("Export")
+            .css_classes(["export_button"])
+            .build();
+        right_sidebar.append(&selected_spells);
+        right_sidebar.append(&export_button);
+
         layout.append(&left_sidebar);
-        layout.append(&search_results);
         layout.append(&spell_preview_widget);
+        layout.append(&right_sidebar);
 
         self.connect_spell_activated(spell_preview_widget);
         self.connect_spell_added();

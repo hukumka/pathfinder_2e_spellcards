@@ -69,6 +69,7 @@ impl SpellRow {
         label.set_hexpand(true);
         let result: Self = glib::Object::builder().build();
         result.set_orientation(gtk4::Orientation::Horizontal);
+        result.set_spacing(5);
         result.append(&label);
         result.append(&add_button);
         result.set_label(label);
@@ -123,6 +124,7 @@ impl SpellCollection {
             .build();
         gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
+            .vexpand(true)
             .child(&list_view)
             .build()
     }
