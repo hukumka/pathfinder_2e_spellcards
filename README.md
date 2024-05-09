@@ -12,7 +12,8 @@ Format is chosen automatically. Normal is default, but for spells that do not fi
 
 Now with GUI for spell selection!
 
-![20240421_23h35m46s_grim](https://github.com/hukumka/pathfinder_2e_spellcards/assets/5196471/aad7dbc7-d685-4831-974c-75fc0ef246bc)
+![image](https://github.com/hukumka/pathfinder_2e_spellcards/assets/5196471/485d0066-3a46-4af0-8331-dd48c761db4e)
+
 
 ## State:
 
@@ -39,15 +40,43 @@ Select spells you need by using search. Then export as pdf.
 
 1. [Install rust toolchain](https://rustup.rs/)
 
-2. Clone repository
+2. Install gtk packages
+
+```
+libgtk-4-dev
+gtk4
+glib2.0
+pandgo1.0
+freetype
+```
+
+3. Clone repository
 ```
 git clone https://github.com/hukumka/pathfinder_2e_spellcards
 cd pathfinder_2e_spellcards
 ```
 
-3.Build:
+4.Build:
 ```
 cargo build --release
 ```
 
 Binary will be in `target/release/` directory.
+
+## Built from source (Nix)
+
+Requires flake support enabled.
+
+```
+nix build github:hukumka/pathfinder_2e_spellcards
+```
+
+## Development enviroment (Nix)
+
+This project provides ready development enviroment with `cargo rust and rust-analyzer` installed. To enter enviroment, in project directory run:
+
+```
+nix develop
+```
+
+
