@@ -1,3 +1,4 @@
+This program uses trademarks and/or copyrights owned by Paizo Inc., used under Paizo's Fan Content Policy (paizo.com/licenses/fancontent). This program is not published, endorsed, or specifically approved by Paizo. For more information about Paizo Inc. and Paizo products, visit [paizo.com](https://paizo.com).
 
 ![IMG_20240509_181119](https://github.com/hukumka/pathfinder_2e_spellcards/assets/5196471/f7dc86fa-c163-4142-8933-b14588e2332c)
 
