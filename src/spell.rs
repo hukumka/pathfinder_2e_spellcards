@@ -17,6 +17,7 @@ pub struct Spell {
     pub heightened: Option<String>,
     pub extras: Vec<String>,
     pub traditions: Traditions,
+    pub has_remaster: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -72,6 +73,8 @@ impl Spell {
                 .unwrap_or(vec![]),
         );
 
+        let summary = object.get_typed::<String>("summary").or_else(|_| object.get_typed::<String>("summary_markdown"))?;
+        let has_remaster = object.get_typed_maybe::<Vec<String>>("remaster_id")?.map(|x| !x.is_empty()).unwrap_or(false);
         Ok(Spell {
             id: Self::parse_id(object)?,
             name,
@@ -81,10 +84,11 @@ impl Spell {
             actions: Actions::parse(object.get_typed::<String>("actions")?)?,
             properties: Self::parse_properties(object)?,
             description,
-            summary: object.get_typed::<String>("summary")?,
+            summary,
             heightened,
             extras,
             traditions,
+            has_remaster,
         })
     }
 
@@ -134,10 +138,32 @@ impl Spell {
                 return Some(Err(error));
             }
         };
+        let value = Self::strip_html_tags(value);
         Some(Ok(Property {
             name: key_name.to_string(),
             value,
         }))
+    }
+
+    fn strip_html_tags(text: String) -> String {
+        let mut chunks = vec![];
+        let mut depth = 0;
+        let mut chunk_start = 0;
+        for (i, char) in text.char_indices() {
+            if char == '<' {
+                if depth == 0 && chunk_start != i {
+                    chunks.push(&text[chunk_start..i]);
+                }
+                depth += 1;
+            } else if char == '>' {
+                depth -= 1;
+                if depth == 0 {
+                    chunk_start = i + 1;
+                }
+            }
+        }
+        chunks.push(&text[chunk_start..]);
+        chunks.join("")
     }
 
     fn parse_traits(object: &Object) -> Result<Vec<String>> {

@@ -18,6 +18,7 @@ impl Query {
         self.test_name(&spell.name)
             && self.test_rank(spell.level)
             && self.test_tradition(&spell.traditions)
+            && !spell.has_remaster
     }
 
     fn test_rank(&self, rank: u8) -> bool {
@@ -53,11 +54,12 @@ pub struct SimpleSpellDB {
 
 impl SimpleSpellDB {
     pub fn new(data: &'static str) -> Result<Self> {
-        let spells = json::parse(data)?
+        let mut spells = json::parse(data)?
             .as_array()?
             .iter()
             .map(|obj| Spell::parse(obj.as_object()?))
             .collect::<anyhow::Result<Vec<_>>>()?;
+        spells.sort_by(|a, b| a.name.as_str().cmp(&b.name.as_str()));
         Ok(Self { spells })
     }
 }

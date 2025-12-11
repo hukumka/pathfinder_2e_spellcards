@@ -13,7 +13,7 @@ use crate::gtk::run_gtk_app;
 
 fn main() -> anyhow::Result<()> {
     run_gtk_app(SimpleSpellDB::new(include_str!(
-        "../nethys_data/spells.json"
+        "../nethys_data/spells.json",
     ))?);
     Ok(())
 }

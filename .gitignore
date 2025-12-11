@@ -2,3 +2,4 @@
 /result*
 spellcard_generator
 *.pdf
+.direnv
